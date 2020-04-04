@@ -128,6 +128,26 @@ PrefabInstance:
   m_Modification:
     m_TransformParent: {fileID: 1774583167}
     m_Modifications:
+    - target: {fileID: 6384613830756026546, guid: 313affed27ec622438a470140718252f,
+        type: 3}
+      propertyPath: AboveSurface
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6384613830756026546, guid: 313affed27ec622438a470140718252f,
+        type: 3}
+      propertyPath: DefaultY
+      value: 1.45
+      objectReference: {fileID: 0}
+    - target: {fileID: 6384613830756026546, guid: 313affed27ec622438a470140718252f,
+        type: 3}
+      propertyPath: defaultWanderRadius
+      value: 5
+      objectReference: {fileID: 0}
+    - target: {fileID: 6384613830756026546, guid: 313affed27ec622438a470140718252f,
+        type: 3}
+      propertyPath: debugMode
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 6384613830756026550, guid: 313affed27ec622438a470140718252f,
         type: 3}
       propertyPath: m_LocalPosition.x
@@ -192,6 +212,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_AgentTypeID
       value: -1372625422
+      objectReference: {fileID: 0}
+    - target: {fileID: 6384613830756026558, guid: 313affed27ec622438a470140718252f,
+        type: 3}
+      propertyPath: interactionMagnitude
+      value: 1.2
       objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 313affed27ec622438a470140718252f, type: 3}

@@ -13,6 +13,8 @@ namespace RSToolkit.AI
         private BotFlying m_botFlyingComponent;
         private int m_findNewPositionAttempts = 0;
         private const int MAX_FINDNEWPOSITIONATTEMPTS = 20;
+        public bool AboveSurface = true;
+
         public BotFlying BotFlyingComponent
         {
             get
@@ -43,18 +45,21 @@ namespace RSToolkit.AI
             var newPos = transform.GetRandomPositionWithinCircle(radius, BotFlyingComponent.BotComponent.SqrPersonalSpaceMagnitude);
             newPos = new Vector3(newPos.x, DefaultY, newPos.z);
 
-            //m_wanderray.direction = newPos - transform.position;
-            //m_wanderray.origin = BotFlyingComponent.BotComponent.ColliderComponent.ClosestPoint(newPos) + m_wanderray.direction.normalized * 0.05f;
-
-            //if (Physics.Raycast(m_wanderray, out m_wanderhit))
-            if (BotFlyingComponent.BotComponent.ColliderComponent.RaycastFromOutsideBounds(ref m_wanderray, out m_wanderhit, newPos))
+            if (AboveSurface && !Physics.Raycast(newPos, Vector3.down, Mathf.Infinity))
             {
+                Debug.Log("Not above surface");
+                return GetNewWanderPosition(radius);
+            }
+
+            if (BotFlyingComponent.BotComponent.ColliderComponent.LinecastFromOutsideBounds(out m_wanderhit, newPos)) //.RaycastFromOutsideBounds(ref m_wanderray, out m_wanderhit, newPos))
+            {
+               
                 if (debugMode)
                 {
                     Debug.Log($"Wander position is behind {m_wanderhit.transform.name}");
                 }
 
-
+            
                 if (Vector3.Distance(transform.position, m_wanderhit.point) * 0.75f >= BotFlyingComponent.BotComponent.SqrPersonalSpaceMagnitude)
                 {
                     newPos = Vector3.Lerp(transform.position, m_wanderhit.point, 0.75f);
@@ -65,13 +70,12 @@ namespace RSToolkit.AI
                 }
             }
 
-
             m_findNewPositionAttempts = 0;
-            return newPos;
-        
+            return newPos;    
         }
 
 
     }
 
 }
+ 
