@@ -213,6 +213,11 @@ PrefabInstance:
       propertyPath: m_AgentTypeID
       value: -1372625422
       objectReference: {fileID: 0}
+    - target: {fileID: 6384613830756026553, guid: 313affed27ec622438a470140718252f,
+        type: 3}
+      propertyPath: defaultWanderRadius
+      value: 5
+      objectReference: {fileID: 0}
     - target: {fileID: 6384613830756026558, guid: 313affed27ec622438a470140718252f,
         type: 3}
       propertyPath: interactionMagnitude
