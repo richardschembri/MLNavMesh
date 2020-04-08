@@ -380,15 +380,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ccbb1934a9c2dd74cbfefa53d62078ba, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_Bidirectional: 1
+  m_Bidirectional: 0
   Direction: 1
-  linkStartPointOffset: 0.25
   minJumpHeight: 0.15
   maxJumpHeight: 1
-  maxJumpDist: 5
+  jumpDistVertical: 0.035
+  maxJumpDistHorizontal: 5
+  linkStartPointOffset: 0.25
   m_obsticleCheckYOffset: 0.5
   sphereCastRadius: 1
-  linkWidth: 0.5
+  linkWidth: 0.25
   linkArea: 0
   linkBidirectional: 1
   linkCostModifier: -1

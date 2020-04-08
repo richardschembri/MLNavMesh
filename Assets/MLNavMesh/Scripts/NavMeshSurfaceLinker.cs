@@ -32,12 +32,16 @@ namespace RSToolkit.AI
 
         public LinkDirection Direction = LinkDirection.Vertical;
 
-        public float linkStartPointOffset = .25f;
+        
 
-        [Header("OffMeshLinks")]
+        [Header("NavMeshLinks")]
         public float minJumpHeight = 0.15f;
         public float maxJumpHeight = 1f;
-        public float maxJumpDist = 5f;
+        public float jumpDistVertical = 0.035f;
+
+        [Header("NavMeshLinks Horizontal")]
+        public float maxJumpDistHorizontal = 5f;
+        public float linkStartPointOffset = .25f;
 
         private Vector3 m_obsticleCheckDirection;
 
@@ -91,7 +95,7 @@ namespace RSToolkit.AI
             // Start Position
             result[0] = position + normal * Vector3.forward * m_agentRadius * 2;
             // End Position
-            result[1] = result[0] - Vector3.up * maxJumpHeight * 1.1f;
+            result[1] = (result[0] - Vector3.up * maxJumpHeight * 1.1f);
 
             return result;
         }
@@ -118,7 +122,7 @@ namespace RSToolkit.AI
                     
                     if (Vector3.Distance(position, navMeshHit.position) > minJumpHeight)
                     {
-                        
+
                         Vector3 spawnPosition = (position - normal * Vector3.forward * 0.02f);
                         if ((spawnPosition.y - navMeshHit.position.y) > minJumpHeight)
                         {
@@ -142,14 +146,14 @@ namespace RSToolkit.AI
             m_obsticleCheckDirection = startEnd[1] - startEnd[0];
             m_obsticleCheckPosition = new Vector3(position.x, (position.y + m_obsticleCheckYOffset), position.z);
             // ray cast to check for obsticles
-            if (!Physics.Raycast(m_obsticleCheckPosition, m_obsticleCheckDirection, (maxJumpDist / 2), m_navMeshSurfaceComponent.layerMask))
+            if (!Physics.Raycast(m_obsticleCheckPosition, m_obsticleCheckDirection, (maxJumpDistHorizontal / 2), m_navMeshSurfaceComponent.layerMask))
             {
                 var m_obsticleCheckPositionReverse = (m_obsticleCheckPosition + (m_obsticleCheckDirection));
                 //now raycast back the other way to make sure we're not raycasting through the inside of a mesh the first time.
-                if (!Physics.Raycast(m_obsticleCheckPositionReverse, -m_obsticleCheckDirection, (maxJumpDist + 1), m_navMeshSurfaceComponent.layerMask))
+                if (!Physics.Raycast(m_obsticleCheckPositionReverse, -m_obsticleCheckDirection, (maxJumpDistHorizontal + 1), m_navMeshSurfaceComponent.layerMask))
                 {
                     //if no walls 1 unit out then check for other colliders using the StartPos offset so as to not detect the edge we are spherecasting from.
-                    if (Physics.SphereCast(offsetStartPos, sphereCastRadius, m_obsticleCheckDirection, out raycastHit, maxJumpDist, m_navMeshSurfaceComponent.layerMask, QueryTriggerInteraction.Ignore))
+                    if (Physics.SphereCast(offsetStartPos, sphereCastRadius, m_obsticleCheckDirection, out raycastHit, maxJumpDistHorizontal, m_navMeshSurfaceComponent.layerMask, QueryTriggerInteraction.Ignore))
                     {
                         var offsetHitPoint = LerpByDistance(raycastHit.point, startEnd[1], .2f);
                         if (NavMesh.SamplePosition(offsetHitPoint, out navMeshHit, 1f, NavMesh.AllAreas))
@@ -181,6 +185,7 @@ namespace RSToolkit.AI
             linkComponent.bidirectional = bidirectional;
             linkComponent.costModifier = linkCostModifier;
             linkComponent.autoUpdate = linkAutoUpdatePosition;
+            linkComponent.agentTypeID = m_navMeshSurfaceComponent.agentTypeID;
 
             linkComponent.UpdateLink();
           
