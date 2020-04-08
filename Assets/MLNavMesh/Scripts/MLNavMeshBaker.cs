@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using RSToolkit.AI;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
@@ -7,9 +8,13 @@ using UnityEngine.XR.MagicLeap;
 
 namespace RSToolkit.MLNavMesh
 {
+    [RequireComponent(typeof(NavMeshSurfaceLinker))]
+    [RequireComponent(typeof(NavMeshSurface))]
     public class MLNavMeshBaker : MonoBehaviour
     {
         private NavMeshSurface m_surface;
+        private NavMeshSurfaceLinker m_linker;
+
         [SerializeField, Tooltip("The spatial mapper from which to update mesh params.")]
         private MLSpatialMapper m_mlSpatialMapper = null;
         private Coroutine m_delayedBakeNavMesh = null;
@@ -28,16 +33,23 @@ namespace RSToolkit.MLNavMesh
         private void Awake()
         {
             m_surface = GetComponent<NavMeshSurface>();
+            m_linker = GetComponent<NavMeshSurfaceLinker>();
+
             m_mlSpatialMapper.meshAdded += OnMeshAddedListener;
             m_mlSpatialMapper.meshUpdated += OnMeshUpdatedListener;
         }
 
         private void OnMeshUpdatedListener(UnityEngine.XR.MeshId obj)
         {
-            throw new System.NotImplementedException();
+            OnMeshAddedOrUpdated();
         }
 
         private void OnMeshAddedListener(UnityEngine.XR.MeshId obj)
+        {
+            OnMeshAddedOrUpdated();
+        }
+
+        private void OnMeshAddedOrUpdated()
         {
             if (m_delayedBakeNavMesh != null)
             {
@@ -50,12 +62,13 @@ namespace RSToolkit.MLNavMesh
         public void BakeSurface()
         {
             m_surface.BuildNavMesh();
+            m_linker.Bake();
         }
 
         IEnumerator DelayedBakeNavMesh()
         {
             yield return new WaitForSeconds(BakeTimer);
-            m_surface.BuildNavMesh();
+            BakeSurface();
             OnNavMeshBaked.Invoke(this);           
         }
 

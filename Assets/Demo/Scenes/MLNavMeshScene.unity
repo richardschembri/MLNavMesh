@@ -156,7 +156,7 @@ PrefabInstance:
     - target: {fileID: 6384613830756026550, guid: 313affed27ec622438a470140718252f,
         type: 3}
       propertyPath: m_LocalPosition.y
-      value: 1.45
+      value: 1.2
       objectReference: {fileID: 0}
     - target: {fileID: 6384613830756026550, guid: 313affed27ec622438a470140718252f,
         type: 3}
@@ -212,6 +212,16 @@ PrefabInstance:
         type: 3}
       propertyPath: m_AgentTypeID
       value: -1372625422
+      objectReference: {fileID: 0}
+    - target: {fileID: 6384613830756026552, guid: 313affed27ec622438a470140718252f,
+        type: 3}
+      propertyPath: m_Height
+      value: 0.25
+      objectReference: {fileID: 0}
+    - target: {fileID: 6384613830756026552, guid: 313affed27ec622438a470140718252f,
+        type: 3}
+      propertyPath: m_Radius
+      value: 0.35
       objectReference: {fileID: 0}
     - target: {fileID: 6384613830756026553, guid: 313affed27ec622438a470140718252f,
         type: 3}
@@ -293,6 +303,7 @@ GameObject:
   - component: {fileID: 1080120449}
   - component: {fileID: 1080120450}
   - component: {fileID: 1080120451}
+  - component: {fileID: 1080120452}
   m_Layer: 0
   m_Name: MLNavMesh
   m_TagString: Untagged
@@ -354,9 +365,36 @@ MonoBehaviour:
   m_OverrideTileSize: 0
   m_TileSize: 256
   m_OverrideVoxelSize: 0
-  m_VoxelSize: 0.083333336
+  m_VoxelSize: 0.033333335
   m_BuildHeightMesh: 0
   m_NavMeshData: {fileID: 0}
+--- !u!114 &1080120452
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1080120448}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ccbb1934a9c2dd74cbfefa53d62078ba, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_Bidirectional: 1
+  Direction: 1
+  linkStartPointOffset: 0.25
+  minJumpHeight: 0.15
+  maxJumpHeight: 1
+  maxJumpDist: 5
+  m_obsticleCheckYOffset: 0.5
+  sphereCastRadius: 1
+  linkWidth: 0.5
+  linkArea: 0
+  linkBidirectional: 1
+  linkCostModifier: -1
+  linkAutoUpdatePosition: 1
+  invertFacingNormal: 0
+  dontAlignYAxis: 0
 --- !u!4 &1125097283 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 4214550324010282, guid: 24158fb1437dc8e418d893939758764d,
