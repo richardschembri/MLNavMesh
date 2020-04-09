@@ -6,7 +6,7 @@ using UnityEngine.AI;
 using UnityEngine.Events;
 using UnityEngine.XR.MagicLeap;
 
-namespace RSToolkit.MLNavMesh
+namespace RSToolkit.AI.MLNavMesh
 {
     [RequireComponent(typeof(NavMeshSurfaceLinker))]
     [RequireComponent(typeof(NavMeshSurface))]

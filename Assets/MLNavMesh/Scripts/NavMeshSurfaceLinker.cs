@@ -96,7 +96,7 @@ namespace RSToolkit.AI
             result[0] = position + normal * Vector3.forward * m_agentRadius * 2;
             // End Position
             result[1] = (result[0] - Vector3.up * maxJumpHeight * 1.1f);
-
+            result[1] = result[1] + normal * Vector3.forward * jumpDistVertical;
             return result;
         }
 

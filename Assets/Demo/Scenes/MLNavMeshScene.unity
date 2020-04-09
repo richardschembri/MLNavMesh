@@ -384,7 +384,7 @@ MonoBehaviour:
   Direction: 1
   minJumpHeight: 0.15
   maxJumpHeight: 1
-  jumpDistVertical: 0.035
+  jumpDistVertical: 0.25
   maxJumpDistHorizontal: 5
   linkStartPointOffset: 0.25
   m_obsticleCheckYOffset: 0.5
