@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using RSToolkit.Animation;
 using RSToolkit.AI.Helpers;
+using UnityEngine.AI;
 
 namespace RSToolkit.AI
 {
@@ -169,15 +170,20 @@ namespace RSToolkit.AI
 
         void TakingOff_Update()
         {
-            if(BotFlyingComponent.IsCloseToGround())
+            if(!BotFlyingComponent.IsFarFromGround()) // IsCloseToGround())
             {
-                BotFlyingComponent.Flying3DObjectComponent.ApplyVerticalThrust(true);
-            }
+                BotFlyingComponent.Flying3DObjectComponent.ApplyVerticalThrust(true);       
+            }           
             else
             {
-                BotFlyingComponent.Flying3DObjectComponent.ApplyVerticalThrust(true);
+                RigidBodyComponent.Sleep();
                 m_FSM.ChangeState(FlyableStates.Flying);
             }
+        }
+
+        void TakingOff_Exit()
+        {
+            RigidBodyComponent.WakeUp();
         }
 
         bool m_freefall = false;
@@ -204,14 +210,31 @@ namespace RSToolkit.AI
 
         void Landing_Update()
         {
+            /*
             if (BotFlyingComponent.IsCloseToGround())
             {
                 m_FSM.ChangeState(FlyableStates.NotFlying);
 
             }
-            else if(!m_freefall)
+            else*/
+            if (!m_freefall)
             {
                 BotFlyingComponent.Flying3DObjectComponent.ApplyVerticalThrust(false);
+            }
+        }
+
+        void OnCollisionEnter(Collision collision)
+        {
+            if(CurrentState == FlyableStates.Landing)
+            {
+                NavMeshHit navHit;
+                for(int i = 0; i < collision.contacts.Length; i++)
+                {
+                    if (NavMesh.SamplePosition(collision.contacts[i].point, out navHit, 1f, NavMesh.AllAreas)){
+                        m_FSM.ChangeState(FlyableStates.NotFlying);
+                        break;
+                    }
+                }
             }
         }
 
@@ -255,5 +278,7 @@ namespace RSToolkit.AI
                 Debug.Log($"{transform.name} FlyableStates changed to {state.ToString()}");
             }
         }
+
+
     }
 }
