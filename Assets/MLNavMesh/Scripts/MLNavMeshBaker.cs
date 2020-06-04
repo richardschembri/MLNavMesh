@@ -1,4 +1,5 @@
 ﻿using RSToolkit.AI;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -12,13 +13,16 @@ namespace RSToolkit.AI.MLNavMesh
     [RequireComponent(typeof(NavMeshSurface))]
     public class MLNavMeshBaker : MonoBehaviour
     {
+        public bool HasBaked { get; private set; } = false;
         private NavMeshSurface m_surface;
         private NavMeshSurfaceLinker m_linker;
 
         [SerializeField, Tooltip("The spatial mapper from which to update mesh params.")]
         private MLSpatialMapper m_mlSpatialMapper = null;
         private Coroutine m_delayedBakeNavMesh = null;
-        public int BakeTimer = 2;
+        public float BakeTimer = 2;
+
+        public float FirstBakeTimer = 5;
         
         public class OnMLNavMeshBakedEvent : UnityEvent<MLNavMeshBaker>{}
         public OnMLNavMeshBakedEvent OnNavMeshBaked { get; private set; } = new OnMLNavMeshBakedEvent();
@@ -37,6 +41,7 @@ namespace RSToolkit.AI.MLNavMesh
 
             m_mlSpatialMapper.meshAdded += OnMeshAddedListener;
             m_mlSpatialMapper.meshUpdated += OnMeshUpdatedListener;
+            StartCoroutine(DelayedFirstBakeNavMesh());
         }
 
         private void OnMeshUpdatedListener(UnityEngine.XR.MeshId obj)
@@ -61,15 +66,34 @@ namespace RSToolkit.AI.MLNavMesh
 
         public void BakeSurface()
         {
-            m_surface.BuildNavMesh();
-            m_linker.Bake();
+            try
+            {
+                HasBaked = true;
+                m_surface.BuildNavMesh();
+                m_linker.Bake();
+                OnNavMeshBaked.Invoke(this);
+            }
+            catch(Exception ex)
+            {
+                Debug.LogError(ex.Message);
+            }
+            
         }
 
         IEnumerator DelayedBakeNavMesh()
         {
             yield return new WaitForSeconds(BakeTimer);
             BakeSurface();
-            OnNavMeshBaked.Invoke(this);           
+                     
+        }
+
+        IEnumerator DelayedFirstBakeNavMesh()
+        {
+            yield return new WaitForSeconds(FirstBakeTimer);
+            if (!HasBaked)
+            {
+                BakeSurface();
+            }
         }
 
     }

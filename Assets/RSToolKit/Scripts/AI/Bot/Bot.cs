@@ -19,6 +19,10 @@ namespace RSToolkit.AI
 
         public InteractionStates CurrentInteractionState { get; private set; } = InteractionStates.NotInteracting;
 
+        public float InteractableCooldown = 0f;
+        private float m_CanInteractFromTime = 0f;
+
+
         public bool DebugMode = false;
 
         protected BotWander[] m_botWanderComponents;
@@ -26,7 +30,7 @@ namespace RSToolkit.AI
         {
             get
             {
-                if(m_botWanderComponents == null)
+                if (m_botWanderComponents == null)
                 {
                     m_botWanderComponents = GetComponents<BotWander>();
                 }
@@ -55,16 +59,16 @@ namespace RSToolkit.AI
                 m_botMovementComponents = value;
             }
         }
-        protected BotLocomotion m_currenBotMovementComponent;
+        protected BotLocomotion m_currentBotMovementComponent;
 
         protected void SetCurrentBotWander(BotWander b)
         {
             if (m_BotWanderComponents.Contains(b))
             {
                 m_currentBotWanderComponent = b;
-                for(int i = 0; i < m_BotWanderComponents.Length; i++)
+                for (int i = 0; i < m_BotWanderComponents.Length; i++)
                 {
-                    if(m_BotWanderComponents[i] != b)
+                    if (m_BotWanderComponents[i] != b)
                     {
                         m_BotWanderComponents[i].StopWandering(true);
                     }
@@ -80,7 +84,7 @@ namespace RSToolkit.AI
         {
             if (m_BotMovementComponents.Contains(b))
             {
-                m_currenBotMovementComponent = b;
+                m_currentBotMovementComponent = b;
             }
         }
 
@@ -102,7 +106,7 @@ namespace RSToolkit.AI
         {
             get
             {
-                if(m_colliderComponent == null)
+                if (m_colliderComponent == null)
                 {
                     m_colliderComponent = GetComponent<Collider>();
                 }
@@ -153,7 +157,7 @@ namespace RSToolkit.AI
         {
             get
             {
-                return SqrInteractionMagnitude * .75f;
+                return SqrInteractionMagnitude * .5f;
             }
         }
 
@@ -172,7 +176,8 @@ namespace RSToolkit.AI
             if (FocusedOnTransform != null)
             {
                 return IsWithinPersonalSpace(FocusedOnTransform);
-            }else if( FocusedOnPosition != null)
+            }
+            else if (FocusedOnPosition != null)
             {
                 return IsWithinPersonalSpace(FocusedOnPosition.Value);
             }
@@ -182,11 +187,14 @@ namespace RSToolkit.AI
 
         public bool IsWithinInteractionDistance(Vector3 position)
         {
-            return ProximityHelpers.IsWithinDistance(transform, position, SqrInteractionMagnitude);
+            //return ProximityHelpers.IsWithinDistance(transform, position, SqrInteractionMagnitude);
+            return ProximityHelpers.IsWithinDistance(ColliderComponent, position, SqrInteractionMagnitude);
         }
+
         public bool IsWithinPersonalSpace(Vector3 position)
         {
-            return ProximityHelpers.IsWithinDistance(transform, position, SqrPersonalSpaceMagnitude);
+            //return ProximityHelpers.IsWithinDistance(transform, position, SqrPersonalSpaceMagnitude);
+            return ProximityHelpers.IsWithinDistance(ColliderComponent, position, SqrPersonalSpaceMagnitude);
         }
 
         public bool IsWithinInteractionDistance(Transform target)
@@ -199,37 +207,78 @@ namespace RSToolkit.AI
             return IsWithinPersonalSpace(target.position);
         }
 
+        public void ResetInteractionCooldown(){
+            m_CanInteractFromTime = Time.time + InteractableCooldown;
+        }
 
-        public bool AttractMyAttention_ToTransform(Transform target, InteractionStates interactionState = InteractionStates.Interactor)
+        private bool ChangeInteractionState(InteractionStates interactionState, bool force)
         {
-
-            if (IsWithinInteractionDistance(target))
+            if(interactionState == InteractionStates.NotInteracting)
             {
-                FocusOnTransform(target);
+                CurrentInteractionState = interactionState;
+                ResetInteractionCooldown();
+                return true;
+            }
+            else if(force || Time.time > m_CanInteractFromTime)
+            {
                 CurrentInteractionState = interactionState;
                 return true;
             }
             return false;
-
-        }
-        public bool AttractMyAttention_ToTransform()
-        {
-            return AttractMyAttention_ToTransform(FocusedOnTransform);
-
         }
 
-        public bool AttractMyAttention_FromBot(Bot target)
+        public bool AttractMyAttention_ToTransform(Transform target, bool force, InteractionStates interactionState = InteractionStates.Interactor)
         {
-            if(target.FocusedOnTransform != transform)
+
+            if (IsWithinInteractionDistance(target))
             {
-                return target.AttractMyAttention_ToTransform(transform, InteractionStates.Interactee);
+                if (ChangeInteractionState(interactionState, force))
+                {
+                    FocusOnTransform(target);
+                    //CurrentInteractionState = interactionState;
+                    return true;
+                }
+            }
+            return false;
+
+        }
+
+
+
+        public bool AttractMyAttention_ToBot(Bot target, bool force, InteractionStates interactionState = InteractionStates.Interactor)
+        {
+
+            if (IsWithinInteractionDistance(target.transform) || target.IsWithinInteractionDistance(transform))
+            {
+                if (ChangeInteractionState(interactionState, force))
+                {
+                    FocusOnTransform(target.transform);
+                    //CurrentInteractionState = interactionState;
+                    return true;
+                }
+            }
+            return false;
+
+        }
+
+        public bool AttractMyAttention_ToTransform(bool force)
+        {
+            return AttractMyAttention_ToTransform(FocusedOnTransform, force);
+
+        }
+
+        public bool AttractMyAttention_FromBot(Bot target, bool force)
+        {
+            if (target.FocusedOnTransform != transform)
+            {
+                return target.AttractMyAttention_ToBot(this, force, InteractionStates.Interactee);
             }
             return true;
         }
 
-        public bool AttractMyAttention_FromBot()
+        public bool AttractMyAttention_FromBot(bool force)
         {
-            return AttractMyAttention_FromBot(FocusedOnTransform.GetComponent<Bot>());
+            return AttractMyAttention_FromBot(FocusedOnTransform.GetComponent<Bot>(), force);
 
         }
 
@@ -293,7 +342,7 @@ namespace RSToolkit.AI
 
         public bool UnFocus()
         {
-            if(FocusedOnTransform == null)
+            if (FocusedOnTransform == null)
             {
                 return false;
             }
@@ -308,7 +357,7 @@ namespace RSToolkit.AI
         }
 
 
-         public bool IsFacing(Transform target)
+        public bool IsFacing(Transform target)
         {
             return Mathf.Round(transform.rotation.eulerAngles.y * 10) == Mathf.Round(Quaternion.LookRotation(target.position - transform.position, Vector3.up).eulerAngles.y * 10);
             // return transform.rotation == Quaternion.LookRotation(target.position - transform.position, Vector3.up);
@@ -324,20 +373,25 @@ namespace RSToolkit.AI
             return false;
         }
 
+        public bool CanInteract()
+        {
+            return Time.time > m_CanInteractFromTime;
+        }
+
         public bool CanInteractWith(Bot target)
         {
-            return target.FocusedOnTransform == transform || target.FocusedOnTransform == null && !target.NoticedTransforms.Contains(transform);
+            return target.FocusedOnTransform == transform || (target.CanInteract() && target.FocusedOnTransform == null && !target.NoticedTransforms.Contains(transform));
         }
 
         public bool Wander()
         {
 
-           if (m_currentBotWanderComponent.Wander())
-           {
-               return true;
-           }
+            if (m_currentBotWanderComponent.Wander())
+            {
+                return true;
+            }
 
-           return false;
+            return false;
         }
 
         public bool StopWandering(bool stopMoving = false)
@@ -355,76 +409,90 @@ namespace RSToolkit.AI
             return m_currentBotWanderComponent.IsWandering();
         }
 
+        public BotWander.WanderStates GetWanderState()
+        {
+            return m_currentBotWanderComponent.CurrentState;
+        }
+
         public void MoveTowardsPosition(bool fullspeed = true)
         {
-            m_currenBotMovementComponent.MoveTowardsPosition(fullspeed);
+            m_currentBotMovementComponent.MoveTowardsPosition(fullspeed);
         }
 
         public void MoveTowardsTarget(bool fullspeed = true)
         {
-            m_currenBotMovementComponent.MoveTowardsTarget(fullspeed);
+            m_currentBotMovementComponent.MoveTowardsTarget(fullspeed);
         }
 
         public void MoveToPosition(BotLocomotion.StopMovementConditions stopMovementCondition, bool fullspeed = true)
         {
-            m_currenBotMovementComponent.MoveToPosition(stopMovementCondition, fullspeed);
+            m_currentBotMovementComponent.MoveToPosition(stopMovementCondition, fullspeed);
         }
 
-        public void MoveToTarget(BotLocomotion.StopMovementConditions stopMovementCondition ,bool fullspeed = true)
+        public void MoveToTarget(BotLocomotion.StopMovementConditions stopMovementCondition, bool fullspeed = true)
         {
-            m_currenBotMovementComponent.MoveToTarget(stopMovementCondition, fullspeed);
+            m_currentBotMovementComponent.MoveToTarget(stopMovementCondition, fullspeed);
         }
 
         public void RotateTowardsPosition()
         {
-            m_currenBotMovementComponent.RotateTowardsPosition();
+            m_currentBotMovementComponent.RotateTowardsPosition();
         }
 
         public bool StopMoving()
         {
-            return m_currenBotMovementComponent.StopMoving();
+            return m_currentBotMovementComponent.StopMoving();
         }
 
         public BotLocomotion.LocomotionState GetMovementState()
         {
-            return m_currenBotMovementComponent.CurrentState;
+            return m_currentBotMovementComponent.CurrentState;
         }
 
         public bool IsMoveable()
         {
-            return m_currenBotMovementComponent != null;
+            return m_currentBotMovementComponent != null;
         }
 
         protected virtual void Awake()
         {
-            if (m_BotMovementComponents.Length > 0)
+            if (m_BotMovementComponents.Length > 0 && m_currentBotMovementComponent == null)
             {
                 SetCurrentBotMovement(m_BotMovementComponents[0]);
             }
 
-            if (m_BotWanderComponents.Length > 0)
+            if (m_BotWanderComponents.Length > 0 && m_currentBotWanderComponent == null)
             {
                 SetCurrentBotWander(m_BotWanderComponents[0]);
             }
         }
 
+        protected virtual void Update()
+        {
+
+        }
 
         void OnDrawGizmos()
         {
 #if UNITY_EDITOR
             ProximityHelpers.DrawGizmoProximity(transform, SqrInteractionMagnitude, IsWithinInteractionDistance());
-            if(FocusedOnPosition != null)
-            {
-                UnityEditor.Handles.color = new Color(1f, 1f, 0.008f, 0.55f);
-                UnityEditor.Handles.DrawSolidDisc(FocusedOnPosition.Value, Vector3.up, 0.25f);
-            }
-            if(FocusedOnTransform != null)
+
+            
+            if (FocusedOnTransform != null)
             {
                 var oldColor = UnityEditor.Handles.color;
                 UnityEditor.Handles.color = IsWithinInteractionDistance() ? Color.red : Color.white;
                 UnityEditor.Handles.DrawLine(transform.position, FocusedOnTransform.position);
+                UnityEditor.Handles.color = new Color(1f, 0f, 0f, 0.25f);
+                UnityEditor.Handles.DrawSolidDisc(FocusedOnTransform.position, Vector3.up, 0.25f);
                 UnityEditor.Handles.color = oldColor;
             }
+            else if (FocusedOnPosition != null)
+            {
+                UnityEditor.Handles.color = new Color(1f, 1f, 0.008f, 0.55f);
+                UnityEditor.Handles.DrawSolidDisc(FocusedOnPosition.Value, Vector3.up, 0.25f);
+            }
+            ProximityHelpers.DrawGizmoProximity(transform, SqrPersonalSpaceMagnitude, IsWithinPersonalSpace());
 #endif
         }
 

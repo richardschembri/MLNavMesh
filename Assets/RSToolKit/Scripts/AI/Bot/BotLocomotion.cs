@@ -10,7 +10,7 @@ namespace RSToolkit.AI
 
     public abstract class BotLocomotion : MonoBehaviour
     {
-
+        public bool DebugMode = false;
         public enum LocomotionState
         {
             NotMoving,
@@ -31,11 +31,16 @@ namespace RSToolkit.AI
         {
             get
             {
-                if (m_fsm == null)
-                {
-                    m_fsm = FiniteStateMachine<LocomotionState>.Initialize(this, LocomotionState.NotMoving);
-                }
+                InitFSM();
                 return m_fsm;
+            }
+        }
+
+        private void InitFSM(bool force = false)
+        {
+            if (m_fsm == null || force)
+            {
+                m_fsm = FiniteStateMachine<LocomotionState>.Initialize(this, LocomotionState.NotMoving);
             }
         }
 
@@ -81,7 +86,7 @@ namespace RSToolkit.AI
 
         public bool IsFarFromGround()
         {            
-            return GroundProximityCheckerComponent.IsBeyondRayDistance(GroundProximityCheckerComponent.RayDistance);
+            return GroundProximityCheckerComponent.IsBeyondRayDistance(GroundProximityCheckerComponent.MaxRayDistance);
         }
 
         public bool IsCloseToGround()
@@ -89,9 +94,9 @@ namespace RSToolkit.AI
             return GroundProximityCheckerComponent.IsWithinRayDistance() != null;
         }
 
-        public bool IsGrounded()
+        public bool IsAlmostGrounded()
         {
-            return GroundProximityCheckerComponent.IsTouching();
+            return GroundProximityCheckerComponent.IsAlmostTouching();
         }
 
         public class OnDestinationReachedEvent : UnityEvent<Vector3> { }
@@ -144,7 +149,6 @@ namespace RSToolkit.AI
             {
                 MoveTowardsPosition(m_fullspeed);
             }
-            CharacterAnimParams.TrySetSpeed(BotComponent.AnimatorComponent, CurrentSpeed);
         }
 
         protected virtual void MovingToTarget_Update()
@@ -157,6 +161,12 @@ namespace RSToolkit.AI
             {
                 MoveTowardsTarget(m_fullspeed);
             }
+            
+        }
+
+        protected virtual void NotMoving_Enter()
+        {
+            
         }
 
         public bool StopMoving()
@@ -164,9 +174,21 @@ namespace RSToolkit.AI
             if(CurrentState != LocomotionState.NotMoving)
             {
                 m_FSM.ChangeState(LocomotionState.NotMoving);
+                return true;
             }
             return false;
         }
+
+        protected virtual void Awake()
+        {
+            m_botComponent = GetComponent<Bot>();
+        }
+
+        protected virtual void Update()
+        {
+            CharacterAnimParams.TrySetSpeed(BotComponent.AnimatorComponent, CurrentSpeed);
+        }
+
 
     }
 }

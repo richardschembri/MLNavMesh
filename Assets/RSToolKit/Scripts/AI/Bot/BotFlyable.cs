@@ -99,10 +99,7 @@ namespace RSToolkit.AI
         {
             get
             {
-                if(m_fsm == null)
-                {
-                    m_fsm = FiniteStateMachine<FlyableStates>.Initialize(this, StartInAir ? FlyableStates.Flying : FlyableStates.NotFlying);
-                }
+                InitFSM();
                 return m_fsm;
             }
         }
@@ -260,10 +257,25 @@ namespace RSToolkit.AI
             return CurrentState == FlyableStates.Flying || CurrentState == FlyableStates.NotFlying;
         }
 
+        private void InitFSM()
+        {
+            if (m_fsm == null)
+            {
+                m_fsm = FiniteStateMachine<FlyableStates>.Initialize(this, StartInAir ? FlyableStates.Flying : FlyableStates.NotFlying);
+                m_fsm.Changed += Fsm_Changed;
+            }
+        }
+
         protected override void Awake()
         {
             base.Awake();
-            m_FSM.Changed += Fsm_Changed;
+            InitFSM();
+        }
+
+        protected override void Update()
+        {
+            base.Update();
+            CharacterAnimParams.TrySetSpeed(AnimatorComponent, m_currentBotMovementComponent.CurrentSpeed);
         }
 
         private void Fsm_Changed(FlyableStates state)
