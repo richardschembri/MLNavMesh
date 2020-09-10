@@ -13,35 +13,71 @@ namespace RSToolkit.AI.MLNavMesh
     [RequireComponent(typeof(NavMeshSurface))]
     public class MLNavMeshBaker : MonoBehaviour
     {
+
+        public enum BakeConditions
+        {
+            MESH_ADDED,
+            MESH_UPDATED,
+            BOTH
+        }
+
+        public enum BakeTypes
+        {
+            NONE,
+            SURFACE,
+            LINK,
+            BOTH
+        }
+
         public bool HasBaked { get; private set; } = false;
-        private NavMeshSurface m_surface;
-        private NavMeshSurfaceLinker m_linker;
+        private NavMeshSurface _surface;
+        private NavMeshSurfaceLinker _linker;
+
+        public BakeConditions BakeCondition = BakeConditions.BOTH;
 
         [SerializeField, Tooltip("The spatial mapper from which to update mesh params.")]
-        private MLSpatialMapper m_mlSpatialMapper = null;
-        private Coroutine m_delayedBakeNavMesh = null;
+        private MLSpatialMapper _mlSpatialMapper = null;
+        private Coroutine _delayedBakeNavMesh = null;
+
+        [SerializeField]       
+        private BakeTypes _autoBake = BakeTypes.BOTH;
+        public BakeTypes AutoBake { get { return _autoBake; } set{ _autoBake = value; } }
+
         public float BakeTimer = 2;
 
-        public float FirstBakeTimer = 5;
+        // public float FirstBakeTimer = 5;
         
-        public class OnMLNavMeshBakedEvent : UnityEvent<MLNavMeshBaker>{}
+        public class OnMLNavMeshBakedEvent : UnityEvent<MLNavMeshBaker, BakeTypes>{}
         public OnMLNavMeshBakedEvent OnNavMeshBaked { get; private set; } = new OnMLNavMeshBakedEvent();
         public bool IsGoingToBake
         {
             get
             {
-                return m_delayedBakeNavMesh == null;
+                return _delayedBakeNavMesh == null;
             }
         }
 
         private void Awake()
         {
-            m_surface = GetComponent<NavMeshSurface>();
-            m_linker = GetComponent<NavMeshSurfaceLinker>();
+            _surface = GetComponent<NavMeshSurface>();
+            _linker = GetComponent<NavMeshSurfaceLinker>();
 
-            m_mlSpatialMapper.meshAdded += OnMeshAddedListener;
-            m_mlSpatialMapper.meshUpdated += OnMeshUpdatedListener;
-            StartCoroutine(DelayedFirstBakeNavMesh());
+            switch (BakeCondition)
+            {
+                case BakeConditions.MESH_ADDED:
+                    _mlSpatialMapper.meshAdded += OnMeshAddedListener;
+                    break;
+                case BakeConditions.MESH_UPDATED:
+                    _mlSpatialMapper.meshUpdated += OnMeshUpdatedListener;
+                    break;
+                case BakeConditions.BOTH:
+                    _mlSpatialMapper.meshAdded += OnMeshAddedListener;
+                    _mlSpatialMapper.meshUpdated += OnMeshUpdatedListener;
+                    break;
+            }
+            
+            
+            // StartCoroutine(DelayedFirstBakeNavMesh());
         }
 
         private void OnMeshUpdatedListener(UnityEngine.XR.MeshId obj)
@@ -56,37 +92,49 @@ namespace RSToolkit.AI.MLNavMesh
 
         private void OnMeshAddedOrUpdated()
         {
-            if (m_delayedBakeNavMesh != null)
+            if (_delayedBakeNavMesh != null)
             {
-                StopCoroutine(m_delayedBakeNavMesh);
-                m_delayedBakeNavMesh = null;
+                StopCoroutine(_delayedBakeNavMesh);
+                _delayedBakeNavMesh = null;
             }
-            m_delayedBakeNavMesh = StartCoroutine(DelayedBakeNavMesh());
+            _delayedBakeNavMesh = StartCoroutine(DelayedBakeNavMesh());
         }
 
-        public void BakeSurface()
+        public bool Bake(BakeTypes bakeType)
         {
-            try
+            HasBaked = false;
+            switch (bakeType)
             {
-                HasBaked = true;
-                m_surface.BuildNavMesh();
-                m_linker.Bake();
-                OnNavMeshBaked.Invoke(this);
+                case BakeTypes.BOTH:
+                    _surface.BuildNavMesh();
+                    _linker.Bake();
+                    HasBaked = true;
+                    break;
+                case BakeTypes.SURFACE:
+                    _surface.BuildNavMesh();
+                    HasBaked = true;
+                    break;
+                case BakeTypes.LINK:
+                    _linker.Bake();
+                    HasBaked = true;
+                    break;
             }
-            catch(Exception ex)
+
+            if (HasBaked)
             {
-                Debug.LogError(ex.Message);
+                OnNavMeshBaked.Invoke(this, bakeType);
             }
-            
+
+            return HasBaked;
         }
 
         IEnumerator DelayedBakeNavMesh()
         {
             yield return new WaitForSeconds(BakeTimer);
-            BakeSurface();
-                     
+            Bake(AutoBake);                    
         }
 
+        /*
         IEnumerator DelayedFirstBakeNavMesh()
         {
             yield return new WaitForSeconds(FirstBakeTimer);
@@ -95,6 +143,7 @@ namespace RSToolkit.AI.MLNavMesh
                 BakeSurface();
             }
         }
+        */
 
     }
 }

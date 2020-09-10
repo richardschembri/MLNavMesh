@@ -337,7 +337,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2087a72f4658e3744856827d7c3857d7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_mlSpatialMapper: {fileID: 1302465857}
+  BakeCondition: 0
+  _mlSpatialMapper: {fileID: 1302465857}
+  _autoBake: 3
   BakeTimer: 2
 --- !u!114 &1080120451
 MonoBehaviour:
@@ -380,14 +382,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ccbb1934a9c2dd74cbfefa53d62078ba, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_Bidirectional: 0
+  _Bidirectional: 1
   Direction: 1
   minJumpHeight: 0.15
   maxJumpHeight: 1
   jumpDistVertical: 0.25
   maxJumpDistHorizontal: 5
   linkStartPointOffset: 0.25
-  m_obsticleCheckYOffset: 0.5
+  _obsticleCheckYOffset: 0.5
   sphereCastRadius: 1
   linkWidth: 0.25
   linkArea: 0

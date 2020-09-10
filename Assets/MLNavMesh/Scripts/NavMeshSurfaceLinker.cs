@@ -22,17 +22,24 @@ namespace RSToolkit.AI
             Both
         }
 
-        [SerializeField]
-        bool m_Bidirectional = true;
-        public bool Bidirectional { get { return m_Bidirectional; } set { m_Bidirectional = value; } }
 
-        private float m_agentRadius;
-        //private MeshEdge[] m_edges;
-        private List<MeshEdge> m_edges;
+        private NavMeshSurface _surface;
+
+        [SerializeField]
+        bool _Bidirectional = true;
+        public bool Bidirectional { get { return _Bidirectional; } set { _Bidirectional = value; } }
+
+        private float _agentRadius;
+        //private MeshEdge[] _edges;        
+
+        private List<MeshEdge> _edges = new List<MeshEdge>();
+        //private RaycastHit[] _raycastHits = new RaycastHit[1];
+        private RaycastHit raycastHit;
+
+        private Vector3[] _startEnd = new Vector3[2];
+        //private List<MeshEdge> _edges;
 
         public LinkDirection Direction = LinkDirection.Vertical;
-
-        
 
         [Header("NavMeshLinks")]
         public float minJumpHeight = 0.15f;
@@ -43,10 +50,10 @@ namespace RSToolkit.AI
         public float maxJumpDistHorizontal = 5f;
         public float linkStartPointOffset = .25f;
 
-        private Vector3 m_obsticleCheckDirection;
+        private Vector3 _obsticleCheckDirection;
 
-        public float m_obsticleCheckYOffset = 0.5f;
-        private Vector3 m_obsticleCheckPosition;
+        public float _obsticleCheckYOffset = 0.5f;
+        private Vector3 _obsticleCheckOrigin;
 
         public float sphereCastRadius = 1f;
 
@@ -61,16 +68,16 @@ namespace RSToolkit.AI
         public bool invertFacingNormal = false;
         public bool dontAlignYAxis = false;
 
-        private NavMeshSurface m_navMeshSurfaceComponent;
+        private NavMeshSurface _navMeshSurfaceComponent;
         public NavMeshSurface NavMeshSurfaceComponent
         {
             get
             {
-                if (m_navMeshSurfaceComponent == null)
+                if (_navMeshSurfaceComponent == null)
                 {
-                    m_navMeshSurfaceComponent = GetComponent<NavMeshSurface>();
+                    _navMeshSurfaceComponent = GetComponent<NavMeshSurface>();
                 }
-                return m_navMeshSurfaceComponent;
+                return _navMeshSurfaceComponent;
             }
         }
 
@@ -85,19 +92,141 @@ namespace RSToolkit.AI
                     DestroyImmediate(navMeshLinks[i]);
                 }
             }
+            _edges.Clear();
         }
 
+        #region MeshEdge
+        // public static MeshEdge[] GetNavMeshEdges(NavMeshTriangulation sourceTriangulation, bool invertFacingNormal = false, bool dontAlignYAxis = false)
+        public void SetNavMeshEdges(NavMeshTriangulation sourceTriangulation, bool invertFacingNormal = false, bool dontAlignYAxis = false)
+        {
+            var m = new Mesh()
+            {
+                vertices = sourceTriangulation.vertices,
+                triangles = sourceTriangulation.indices
+            };
 
+            SetMeshEdges(m, invertFacingNormal, dontAlignYAxis);
+        }
+
+        // To optimize
+        private bool TryAddUniqueMeshEdge(ref List<MeshEdge> source, Vector3 startPoint, Vector3 endPoint, bool invertFacingNormal = false, bool dontAlignYAxis = false)
+        {
+            var edge = source.FirstOrDefault(s => (s.StartPoint == startPoint && s.EndPoint == endPoint)
+                                || (s.StartPoint == endPoint && s.EndPoint == startPoint));
+            if (edge == null)
+            {
+                source.Add(new MeshEdge(startPoint, endPoint, invertFacingNormal, dontAlignYAxis));
+                return true;
+            }
+            else
+            {
+                // Not an edge, remove
+                source.Remove(edge);
+                return false;
+            }
+
+        }
+
+        private bool TryAddUniqueMeshEdge(int edgeIndex, Vector3 positionA, Vector3 positionB, bool invertFacingNormal = false, bool dontAlignYAxis = false)
+        {
+            if (IsSameEdge(_edges[edgeIndex], positionA, positionB))
+            {
+                var edge = _edges[edgeIndex];
+                // Not an edge, remove
+                _edges.Remove(edge);
+                edge = null;
+                return true;
+            }
+            else
+            {
+
+                return false;
+            }
+
+        }
+
+        private bool IsSameEdge(MeshEdge edge, Vector3 positionA, Vector3 positionB)
+        {
+            return (edge.StartPoint == positionA && edge.EndPoint == positionB)
+                || (edge.StartPoint == positionB && edge.EndPoint == positionA);
+        }
+
+        // public static MeshEdge[] GetMeshEdges(Mesh source, bool invertFacingNormal = false, bool dontAlignYAxis = false)
+        public void SetMeshEdges(Mesh source, bool invertFacingNormal = false, bool dontAlignYAxis = false)
+        {
+            if (_edges.Count == 0 && source.triangles.Length > 2)
+            {
+                _edges.Add(new MeshEdge(source.vertices[source.triangles[0]], source.vertices[source.triangles[1]], invertFacingNormal, dontAlignYAxis));
+                _edges.Add(new MeshEdge(source.vertices[source.triangles[1]], source.vertices[source.triangles[2]], invertFacingNormal, dontAlignYAxis));
+                _edges.Add(new MeshEdge(source.vertices[source.triangles[2]], source.vertices[source.triangles[0]], invertFacingNormal, dontAlignYAxis));
+            }
+            MeshEdge edge;
+            bool addA = true;
+            bool addB = true;
+            bool addC = true;
+
+            //CALC FROM MESH OPEN EDGES vertices
+            for (int ti = 0; ti < source.triangles.Length; ti += 3)
+            {
+                addA = !(IsPositionAtBoundryEdge(source.vertices[source.triangles[ti]]) || IsPositionAtBoundryEdge(source.vertices[source.triangles[ti + 1]]));
+                addB = !(IsPositionAtBoundryEdge(source.vertices[source.triangles[ti + 1]]) || IsPositionAtBoundryEdge(source.vertices[source.triangles[ti + 2]]));
+                addC = !(IsPositionAtBoundryEdge(source.vertices[source.triangles[ti + 2]]) || IsPositionAtBoundryEdge(source.vertices[source.triangles[ti]]));
+
+                if(!addA && !addB && !addC)
+                {
+                    continue;
+                }
+
+                for (int ei = _edges.Count - 1; ei > 0; ei--)
+                {
+
+                    edge = _edges[ei];
+                    
+                    if (addA && IsSameEdge(edge, source.vertices[source.triangles[ti]], source.vertices[source.triangles[ti + 1]]))
+                    {
+                        _edges.Remove(edge);
+                        edge = null;
+                        addA = false;
+                    }
+                    else if (addB && IsSameEdge(edge, source.vertices[source.triangles[ti + 1]], source.vertices[source.triangles[ti + 2]]))
+                    {
+                        _edges.Remove(edge);
+                        edge = null;
+                        addB = false;
+                    }
+                    else if (addC && IsSameEdge(edge, source.vertices[source.triangles[ti + 2]], source.vertices[source.triangles[ti]]))
+                    {
+                        _edges.Remove(edge);
+                        edge = null;
+                        addC = false;
+                    }
+                }
+
+                if (addA)
+                {
+                    _edges.Add(new MeshEdge(source.vertices[source.triangles[ti]], source.vertices[source.triangles[ti + 1]], invertFacingNormal, dontAlignYAxis));
+                }
+                if (addB)
+                {
+                    _edges.Add(new MeshEdge(source.vertices[source.triangles[ti + 1]], source.vertices[source.triangles[ti + 2]], invertFacingNormal, dontAlignYAxis));
+                }
+                if (addC)
+                {
+                    _edges.Add(new MeshEdge(source.vertices[source.triangles[ti + 2]], source.vertices[source.triangles[ti]], invertFacingNormal, dontAlignYAxis));
+                }
+            }
+            
+        }
+        #endregion MeshEdge
 
         private Vector3[] GetLinkStartEnd(Vector3 position, Quaternion normal)
         {
-            var result = new Vector3[2];
             // Start Position
-            result[0] = position + normal * Vector3.forward * m_agentRadius * 2;
+            _startEnd[0] = position + normal * Vector3.forward * _agentRadius * 2;
             // End Position
-            result[1] = (result[0] - Vector3.up * maxJumpHeight * 1.1f);
-            result[1] = result[1] + normal * Vector3.forward * jumpDistVertical;
-            return result;
+            _startEnd[1] = (_startEnd[0] - Vector3.up * maxJumpHeight * 1.1f);
+            _startEnd[1] = _startEnd[1] + normal * Vector3.forward * jumpDistVertical;
+            return _startEnd;
         }
 
         public Vector3 LerpByDistance(Vector3 A, Vector3 B, float x)
@@ -106,15 +235,27 @@ namespace RSToolkit.AI
             return P;
         }
 
+        private bool IsPositionAtBoundryEdge(Vector3 position)
+        {
+            return (Vector3.Distance(position, new Vector3(position.x, _surface.navMeshData.sourceBounds.min.y, position.z)) < minJumpHeight)
+                    || (Vector3.Distance(position, new Vector3(position.x, _surface.navMeshData.sourceBounds.max.y, position.z)) < minJumpHeight)
+                    || (Vector3.Distance(position, new Vector3(_surface.navMeshData.sourceBounds.min.x, position.y, position.z)) < jumpDistVertical)
+                    || (Vector3.Distance(position, new Vector3(_surface.navMeshData.sourceBounds.max.x, position.y, position.z)) < jumpDistVertical)
+                    || (Vector3.Distance(position, new Vector3(position.x, position.y, _surface.navMeshData.sourceBounds.min.z)) < jumpDistVertical)
+                    || (Vector3.Distance(position, new Vector3(position.x, position.y, _surface.navMeshData.sourceBounds.max.z)) < jumpDistVertical);
+        }
+
         private bool TrySpawnVerticalLink(Vector3 position, Quaternion normal)
         {
+            // Check if position is not at the lowest / highest position
+
             var startEnd = GetLinkStartEnd(position, normal);
 
             NavMeshHit navMeshHit;
             RaycastHit raycastHit;
 
             var rayStart = startEnd[0] - new Vector3(0, 0.075f, 0);
-            if (Physics.Linecast(rayStart, startEnd[1], out raycastHit, m_navMeshSurfaceComponent.layerMask,
+            if (Physics.Linecast(rayStart, startEnd[1], out raycastHit, _navMeshSurfaceComponent.layerMask,
                     QueryTriggerInteraction.Ignore))
             {
                 if (NavMesh.SamplePosition(raycastHit.point, out navMeshHit, 1f, NavMesh.AllAreas))
@@ -142,26 +283,31 @@ namespace RSToolkit.AI
             var offsetStartPos = LerpByDistance(startEnd[0], startEnd[1], linkStartPointOffset);
 
             NavMeshHit navMeshHit;
-            RaycastHit raycastHit;
-            m_obsticleCheckDirection = startEnd[1] - startEnd[0];
-            m_obsticleCheckPosition = new Vector3(position.x, (position.y + m_obsticleCheckYOffset), position.z);
+            // RaycastHit raycastHit;
+            _obsticleCheckDirection = startEnd[1] - startEnd[0];
+            _obsticleCheckOrigin = new Vector3(position.x, (position.y + _obsticleCheckYOffset), position.z);
             // ray cast to check for obsticles
-            if (!Physics.Raycast(m_obsticleCheckPosition, m_obsticleCheckDirection, (maxJumpDistHorizontal / 2), m_navMeshSurfaceComponent.layerMask))
+            if (!Physics.Raycast(_obsticleCheckOrigin, _obsticleCheckDirection, (maxJumpDistHorizontal / 2), _navMeshSurfaceComponent.layerMask, QueryTriggerInteraction.Ignore))
+            // if (Physics.RaycastNonAlloc(_obsticleCheckOrigin, _obsticleCheckDirection, _raycastHits, (maxJumpDistHorizontal / 2), _navMeshSurfaceComponent.layerMask, QueryTriggerInteraction.Ignore) > 0)
             {
-                var m_obsticleCheckPositionReverse = (m_obsticleCheckPosition + (m_obsticleCheckDirection));
+                var _obsticleCheckPositionReverse = (_obsticleCheckOrigin + (_obsticleCheckDirection));
                 //now raycast back the other way to make sure we're not raycasting through the inside of a mesh the first time.
-                if (!Physics.Raycast(m_obsticleCheckPositionReverse, -m_obsticleCheckDirection, (maxJumpDistHorizontal + 1), m_navMeshSurfaceComponent.layerMask))
+                if (!Physics.Raycast(_obsticleCheckPositionReverse, -_obsticleCheckDirection, (maxJumpDistHorizontal + 1), _navMeshSurfaceComponent.layerMask, QueryTriggerInteraction.Ignore))
+                // if (Physics.RaycastNonAlloc(_obsticleCheckPositionReverse, -_obsticleCheckDirection, _raycastHits,  (maxJumpDistHorizontal + 1), _navMeshSurfaceComponent.layerMask, QueryTriggerInteraction.Ignore) > 0)
                 {
                     //if no walls 1 unit out then check for other colliders using the StartPos offset so as to not detect the edge we are spherecasting from.
-                    if (Physics.SphereCast(offsetStartPos, sphereCastRadius, m_obsticleCheckDirection, out raycastHit, maxJumpDistHorizontal, m_navMeshSurfaceComponent.layerMask, QueryTriggerInteraction.Ignore))
+                    if (Physics.SphereCast(offsetStartPos, sphereCastRadius, _obsticleCheckDirection, out raycastHit, maxJumpDistHorizontal, _navMeshSurfaceComponent.layerMask, QueryTriggerInteraction.Ignore))
+                    // if (Physics.SphereCastNonAlloc(offsetStartPos, sphereCastRadius, _obsticleCheckDirection, _raycastHits, maxJumpDistHorizontal, _navMeshSurfaceComponent.layerMask, QueryTriggerInteraction.Ignore) > 0)
                     {
                         var offsetHitPoint = LerpByDistance(raycastHit.point, startEnd[1], .2f);
+                        // var offsetHitPoint = LerpByDistance(_raycastHits[0].point, startEnd[1], .2f);
                         if (NavMesh.SamplePosition(offsetHitPoint, out navMeshHit, 1f, NavMesh.AllAreas))
                         {
                             Vector3 spawnPosition = (position - normal * Vector3.forward * 0.02f);
                             if (Vector3.Distance(position, navMeshHit.position) > 1.1f)
                             {
                                 SpawnLink("HorizontalNavMeshLink", spawnPosition, normal, navMeshHit.position, false);
+                                return true;
                             }
                         }
                     }
@@ -185,50 +331,51 @@ namespace RSToolkit.AI
             linkComponent.bidirectional = bidirectional;
             linkComponent.costModifier = linkCostModifier;
             linkComponent.autoUpdate = linkAutoUpdatePosition;
-            linkComponent.agentTypeID = m_navMeshSurfaceComponent.agentTypeID;
+            linkComponent.agentTypeID = _navMeshSurfaceComponent.agentTypeID;
 
             linkComponent.UpdateLink();
           
-
             spawnedLink.transform.SetParent(transform);
         }
 
         private void SpawnLinks()
         {
-            // if (m_edges.Length == 0) return;
-            if (m_edges.Count == 0) return;
-            Clear();
+            if (_edges.Count == 0) return;
+            
+            
             int linkCount;
             float heightShift;
 
             // for (int i = 0; i < m_edges.Length; i++)
-            for (int i = 0; i < m_edges.Count; i++)
+            for (int i = 0; i < _edges.Count; i++)
             {
-                linkCount = (int)Mathf.Clamp(m_edges[i].Length / linkWidth, 0, 10000);
+                linkCount = (int)Mathf.Clamp(_edges[i].Length / linkWidth, 0, 10000);
                 heightShift = 0;
+                Vector3 placePos;
                 for (int li = 0; li < linkCount; li++) //every edge length segment
                 {
-                    Vector3 placePos = Vector3.Lerp(
-                                           m_edges[i].StartPoint,
-                                           m_edges[i].EndPoint,
+                    placePos = Vector3.Lerp(
+                                           _edges[i].StartPoint,
+                                           _edges[i].EndPoint,
                                            (float)li / (float)linkCount //position on edge
                                            + 0.5f / (float)linkCount //shift for half link width
-                                       ) + m_edges[i].FacingNormal * Vector3.up * heightShift;
+                                       ) + _edges[i].FacingNormal * Vector3.up * heightShift;
+
 
                     switch (Direction)
                     {
                         case LinkDirection.Horizontal:
-                            TrySpawnHorizontalLink(placePos, m_edges[i].FacingNormal);
+                            TrySpawnHorizontalLink(placePos, _edges[i].FacingNormal);
                             break;
                         case LinkDirection.Vertical:
-                            TrySpawnVerticalLink(placePos, m_edges[i].FacingNormal);
+                            TrySpawnVerticalLink(placePos, _edges[i].FacingNormal);
                             break;
                         case LinkDirection.Both:
-                            TrySpawnHorizontalLink(placePos, m_edges[i].FacingNormal);
-                            TrySpawnVerticalLink(placePos, m_edges[i].FacingNormal);
+                            TrySpawnHorizontalLink(placePos, _edges[i].FacingNormal);
+                            TrySpawnVerticalLink(placePos, _edges[i].FacingNormal);
                             break;
                     }
-                    
+                
                 }
             }
         }
@@ -237,29 +384,30 @@ namespace RSToolkit.AI
         public void Bake()
         {
             var settings = NavMesh.GetSettingsByID(NavMeshSurfaceComponent.agentTypeID);
-            m_agentRadius = settings.agentRadius;
-            m_edges?.Clear();
-            m_edges = MeshEdge.GetNavMeshEdges(NavMesh.CalculateTriangulation(), invertFacingNormal, dontAlignYAxis);
+            _agentRadius = settings.agentRadius;
+
+            Clear();
+            
+            SetNavMeshEdges(NavMesh.CalculateTriangulation(), invertFacingNormal, dontAlignYAxis);
             SpawnLinks();
+
 #if UNITY_EDITOR
             if (!Application.isPlaying) EditorSceneManager.MarkSceneDirty(gameObject.scene);
 #endif
         }
 
-        /*
-        private void OnDrawGizmos()
+      
+        private void Awake()
         {
-            for (int i = 0; i < m_edges.Count; i++)
-            {
-                Debug.DrawLine(m_edges[i].StartPoint + new Vector3(0, 0.1f, 0), m_edges[i].EndPoint + new Vector3(0, 0.1f, 0), Color.yellow);
-                
-            }
+            _surface = GetComponent<NavMeshSurface>();
         }
-        */
+        
+
     }
 
     public class MeshEdge
     {
+
         public Vector3 StartPoint { get; private set; }
         public Vector3 EndPoint { get; private set; }
 
@@ -329,84 +477,7 @@ namespace RSToolkit.AI
 
         #region Static Functions
 
-        // public static MeshEdge[] GetNavMeshEdges(NavMeshTriangulation sourceTriangulation, bool invertFacingNormal = false, bool dontAlignYAxis = false)
-        public static List<MeshEdge> GetNavMeshEdges(NavMeshTriangulation sourceTriangulation, bool invertFacingNormal = false, bool dontAlignYAxis = false)
-        {
-            var m = new Mesh()
-            {
-                vertices = sourceTriangulation.vertices,
-                triangles = sourceTriangulation.indices
-            };
-            return GetMeshEdges(m, invertFacingNormal, dontAlignYAxis);
-        }
-
-        // To optimize
-        private static bool TryAddUniqueMeshEdge(ref List<MeshEdge> source, Vector3 startPoint, Vector3 endPoint, bool invertFacingNormal = false, bool dontAlignYAxis = false)
-        {
-            var edge = source.FirstOrDefault(s => (s.StartPoint == startPoint && s.EndPoint == endPoint)
-                                || (s.StartPoint == endPoint && s.EndPoint == startPoint));
-            if (edge == null)
-            {
-                source.Add(new MeshEdge(startPoint, endPoint, invertFacingNormal, dontAlignYAxis));
-                return true;
-            }
-            else
-            {
-                // Not an edge, remove
-                source.Remove(edge);
-                return false;
-            }
-            
-        }
-
-
-        // public static MeshEdge[] GetMeshEdges(Mesh source, bool invertFacingNormal = false, bool dontAlignYAxis = false)
-        public static List<MeshEdge> GetMeshEdges(Mesh source, bool invertFacingNormal = false, bool dontAlignYAxis = false)
-        {
-            // var result = new MeshEdge[source.triangles.Length];
-            var result = new List<MeshEdge>();
-            for (int i = 0; i < source.triangles.Length - 1; i += 3)
-            {
-                //CALC FROM MESH OPEN EDGES vertices
-                TryAddUniqueMeshEdge(ref result,
-                        source.vertices[source.triangles[i]],
-                        source.vertices[source.triangles[i + 1]],
-                        invertFacingNormal, dontAlignYAxis
-                    );
-                /*
-                result[i] = new MeshEdge(
-                        source.vertices[source.triangles[i]],
-                        source.vertices[source.triangles[i + 1]],
-                        invertFacingNormal, dontAlignYAxis
-                    );
-                    */
-                TryAddUniqueMeshEdge(ref result,
-                        source.vertices[source.triangles[i + 1]],
-                        source.vertices[source.triangles[i + 2]],
-                        invertFacingNormal, dontAlignYAxis
-                    );
-                /*
-                result[i + 1] = new MeshEdge(
-                        source.vertices[source.triangles[i + 1]],
-                        source.vertices[source.triangles[i + 2]],
-                        invertFacingNormal, dontAlignYAxis
-                    );
-                    */
-                TryAddUniqueMeshEdge(ref result,
-                        source.vertices[source.triangles[i + 2]],
-                        source.vertices[source.triangles[i]],
-                        invertFacingNormal, dontAlignYAxis
-                    );
-                /*
-                result[i + 2] = new MeshEdge(
-                        source.vertices[source.triangles[i + 2]],
-                        source.vertices[source.triangles[i]],
-                        invertFacingNormal, dontAlignYAxis
-                    );
-                    */
-            }
-            return result;
-        }
+        
 
         
         #endregion
