@@ -382,7 +382,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ccbb1934a9c2dd74cbfefa53d62078ba, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _Bidirectional: 1
   Direction: 1
   minJumpHeight: 0.15
   maxJumpHeight: 1
@@ -603,7 +602,7 @@ MonoBehaviour:
   m_MeshParent: {fileID: 1080120449}
   m_MeshType: 0
   m_FillHoleLength: 1
-  m_Planarize: 0
+  m_Planarize: 1
   m_DisconnectedComponentArea: 0.25
   m_MeshQueueSize: 4
   m_PollingRate: 0.25

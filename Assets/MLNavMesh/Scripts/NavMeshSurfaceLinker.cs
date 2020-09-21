@@ -9,6 +9,12 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 #endif
 
+#region Jobs
+using Unity.Burst;
+using Unity.Jobs;
+using Unity.Collections;
+#endregion
+
 // Based on source code found in this Unity post: https://forum.unity.com/threads/navmesh-links-generator-for-navmeshcomponents.515143/
 namespace RSToolkit.AI
 {
@@ -33,7 +39,8 @@ namespace RSToolkit.AI
         private RaycastHit raycastHit;
 
         private Vector3[] _startEnd = new Vector3[2];
-        //private List<MeshEdge> _edges;
+        private List<MeshEdge> _edges = new List<MeshEdge>(512);
+        private NativeList<MeshEdge> _listEdges = new NativeList<MeshEdge>(Allocator.Persistent);
 
         public LinkDirection Direction = LinkDirection.Vertical;
 
@@ -96,14 +103,38 @@ namespace RSToolkit.AI
         // public static MeshEdge[] GetNavMeshEdges(NavMeshTriangulation sourceTriangulation, bool invertFacingNormal = false, bool dontAlignYAxis = false)
         public void SetNavMeshEdges(NavMeshTriangulation sourceTriangulation, bool invertFacingNormal = false, bool dontAlignYAxis = false)
         {
-            var m = new Mesh()
-            {
-                vertices = sourceTriangulation.vertices,
-                triangles = sourceTriangulation.indices
-            };
+            //var m = new Mesh()
+            //{
+            //    vertices = sourceTriangulation.vertices,
+            //    triangles = sourceTriangulation.indices
+            //};
 
-            // SetMeshEdges(m, invertFacingNormal, dontAlignYAxis);
-            SetMeshLinkedEdges(m, invertFacingNormal, dontAlignYAxis);
+            //SetMeshEdges(m, invertFacingNormal, dontAlignYAxis);          // List && Struct
+            //SetMeshLinkedEdges(m, invertFacingNormal, dontAlignYAxis);    // LinkedList && Struct | Class.
+
+            // Run as SetMeshEdge as a job.
+            var sourceBounds = _surface.navMeshData.sourceBounds;
+            //NativeArray<Vector3> vertices = new NativeArray<Vector3>(sourceTriangulation.vertices, Allocator.Persistent);
+            //NativeArray<int> indices = new NativeArray<int>(sourceTriangulation.indices, Allocator.Persistent);
+
+            var job = new SetMeshEdgeTask(invertFacingNormal, dontAlignYAxis,
+                                            sourceBounds, minJumpHeight, maxJumpHeight, jumpDistVertical,
+                                            sourceTriangulation.vertices, sourceTriangulation.indices);
+
+            var jobHandle = job.Schedule(); // Run the job
+
+            jobHandle.Complete();   // Wait until it completes
+
+            //_edges.AddRange(job.edges); // Get the output result
+
+            foreach (var item in job.edges)
+            {
+                _edges.Add(item);
+            }
+
+            job.edges.Dispose();    // dispose the job edges.
+            job.indices.Dispose();
+            job.vertices.Dispose();
         }
 
         /*
@@ -148,142 +179,269 @@ namespace RSToolkit.AI
 
         
 
-        public void SetMeshLinkedEdges(Mesh source, bool invertFacingNormal = false, bool dontAlignYAxis = false)
-        {
-            LinkedListNode<MeshEdge> edgeNode;
-            if (!_linkedEdges.Any() && source.triangles.Length > 2)
-            {
-                edgeNode = _linkedEdges.AddFirst(new MeshEdge(source.vertices[source.triangles[0]], source.vertices[source.triangles[1]], invertFacingNormal, dontAlignYAxis));
-                edgeNode = _linkedEdges.AddAfter(edgeNode, new MeshEdge(source.vertices[source.triangles[1]], source.vertices[source.triangles[2]], invertFacingNormal, dontAlignYAxis));
-                _linkedEdges.AddAfter(edgeNode, new MeshEdge(source.vertices[source.triangles[2]], source.vertices[source.triangles[0]], invertFacingNormal, dontAlignYAxis));
-            }
+        //public void SetMeshLinkedEdges(Mesh source, bool invertFacingNormal = false, bool dontAlignYAxis = false)
+        //{
+        //    LinkedListNode<MeshEdge> edgeNode;
+        //    if (!_linkedEdges.Any() && source.triangles.Length > 2)
+        //    {
+        //        edgeNode = _linkedEdges.AddFirst(new MeshEdge(source.vertices[source.triangles[0]], source.vertices[source.triangles[1]], invertFacingNormal, dontAlignYAxis));
+        //        edgeNode = _linkedEdges.AddAfter(edgeNode, new MeshEdge(source.vertices[source.triangles[1]], source.vertices[source.triangles[2]], invertFacingNormal, dontAlignYAxis));
+        //        _linkedEdges.AddAfter(edgeNode, new MeshEdge(source.vertices[source.triangles[2]], source.vertices[source.triangles[0]], invertFacingNormal, dontAlignYAxis));
+        //    }
 
-            bool addA = true;
-            bool addB = true;
-            bool addC = true;
+        //    bool addA = true;
+        //    bool addB = true;
+        //    bool addC = true;
 
-            //CALC FROM MESH OPEN EDGES vertices
-            for (int ti = 0; ti < source.triangles.Length; ti += 3)
-            {
-                addA = !(IsPositionAtBoundryEdge(source.vertices[source.triangles[ti]]) || IsPositionAtBoundryEdge(source.vertices[source.triangles[ti + 1]]));
-                addB = !(IsPositionAtBoundryEdge(source.vertices[source.triangles[ti + 1]]) || IsPositionAtBoundryEdge(source.vertices[source.triangles[ti + 2]]));
-                addC = !(IsPositionAtBoundryEdge(source.vertices[source.triangles[ti + 2]]) || IsPositionAtBoundryEdge(source.vertices[source.triangles[ti]]));
+        //    //CALC FROM MESH OPEN EDGES vertices
+        //    for (int ti = 0; ti < source.triangles.Length; ti += 3)
+        //    {
+        //        addA = !(IsPositionAtBoundryEdge(source.vertices[source.triangles[ti]]) || IsPositionAtBoundryEdge(source.vertices[source.triangles[ti + 1]]));
+        //        addB = !(IsPositionAtBoundryEdge(source.vertices[source.triangles[ti + 1]]) || IsPositionAtBoundryEdge(source.vertices[source.triangles[ti + 2]]));
+        //        addC = !(IsPositionAtBoundryEdge(source.vertices[source.triangles[ti + 2]]) || IsPositionAtBoundryEdge(source.vertices[source.triangles[ti]]));
 
-                if (!addA && !addB && !addC)
-                {
-                    continue;
-                }
-                edgeNode = _linkedEdges.First;
+        //        if (!addA && !addB && !addC)
+        //        {
+        //            continue;
+        //        }
+        //        edgeNode = _linkedEdges.First;
                 
-                while (edgeNode != null)
-                {                    
-                    if (addA && MeshEdgeManager.IsSameEdge(edgeNode.Value, source.vertices[source.triangles[ti]], source.vertices[source.triangles[ti + 1]]))  //edgeNode.Value.HasPoints(source.vertices[source.triangles[ti]], source.vertices[source.triangles[ti + 1]]))
-                    {
-                        _linkedEdges.Remove(edgeNode);
-                        addA = false;
-                    }
-                    else if (addB && MeshEdgeManager.IsSameEdge(edgeNode.Value, source.vertices[source.triangles[ti + 1]], source.vertices[source.triangles[ti + 2]]))  //edgeNode.Value.HasPoints(source.vertices[source.triangles[ti + 1]], source.vertices[source.triangles[ti + 2]]))
-                    {
-                        _linkedEdges.Remove(edgeNode);
-                        addB = false;
-                    }
-                    else if (addC && MeshEdgeManager.IsSameEdge(edgeNode.Value, source.vertices[source.triangles[ti + 2]], source.vertices[source.triangles[ti]])) //edgeNode.Value.HasPoints(source.vertices[source.triangles[ti + 2]], source.vertices[source.triangles[ti]]))
-                    {
-                        _linkedEdges.Remove(edgeNode);
-                        addC = false;
-                    }
-                    edgeNode = edgeNode.Next;
-                }
+        //        while (edgeNode != null)
+        //        {                    
+        //            if (addA && MeshEdgeManager.IsSameEdge(edgeNode.Value, source.vertices[source.triangles[ti]], source.vertices[source.triangles[ti + 1]]))  //edgeNode.Value.HasPoints(source.vertices[source.triangles[ti]], source.vertices[source.triangles[ti + 1]]))
+        //            {
+        //                _linkedEdges.Remove(edgeNode);
+        //                addA = false;
+        //            }
+        //            else if (addB && MeshEdgeManager.IsSameEdge(edgeNode.Value, source.vertices[source.triangles[ti + 1]], source.vertices[source.triangles[ti + 2]]))  //edgeNode.Value.HasPoints(source.vertices[source.triangles[ti + 1]], source.vertices[source.triangles[ti + 2]]))
+        //            {
+        //                _linkedEdges.Remove(edgeNode);
+        //                addB = false;
+        //            }
+        //            else if (addC && MeshEdgeManager.IsSameEdge(edgeNode.Value, source.vertices[source.triangles[ti + 2]], source.vertices[source.triangles[ti]])) //edgeNode.Value.HasPoints(source.vertices[source.triangles[ti + 2]], source.vertices[source.triangles[ti]]))
+        //            {
+        //                _linkedEdges.Remove(edgeNode);
+        //                addC = false;
+        //            }
+        //            edgeNode = edgeNode.Next;
+        //        }
 
-                edgeNode = _linkedEdges.Last;
+        //        edgeNode = _linkedEdges.Last;
 
 
-                if (addA)
-                {
+        //        if (addA)
+        //        {
 
-                    _linkedEdges.AddAfter(edgeNode, new MeshEdge(source.vertices[source.triangles[ti]], source.vertices[source.triangles[ti + 1]], invertFacingNormal, dontAlignYAxis));                                      
-                }
-                if (addB)
-                {
+        //            _linkedEdges.AddAfter(edgeNode, new MeshEdge(source.vertices[source.triangles[ti]], source.vertices[source.triangles[ti + 1]], invertFacingNormal, dontAlignYAxis));                                      
+        //        }
+        //        if (addB)
+        //        {
 
-                    _linkedEdges.AddAfter(edgeNode, new MeshEdge(source.vertices[source.triangles[ti + 1]], source.vertices[source.triangles[ti + 2]], invertFacingNormal, dontAlignYAxis));                   
-                }
-                if (addC)
-                {
-                    _linkedEdges.AddAfter(edgeNode, new MeshEdge(source.vertices[source.triangles[ti + 2]], source.vertices[source.triangles[ti]], invertFacingNormal, dontAlignYAxis));
-                }
+        //            _linkedEdges.AddAfter(edgeNode, new MeshEdge(source.vertices[source.triangles[ti + 1]], source.vertices[source.triangles[ti + 2]], invertFacingNormal, dontAlignYAxis));                   
+        //        }
+        //        if (addC)
+        //        {
+        //            _linkedEdges.AddAfter(edgeNode, new MeshEdge(source.vertices[source.triangles[ti + 2]], source.vertices[source.triangles[ti]], invertFacingNormal, dontAlignYAxis));
+        //        }
 
-            }
-        }
+        //    }
+        //}
+       
+        //public void SetMeshEdges(Mesh source, bool invertFacingNormal = false, bool dontAlignYAxis = false)
+        //{
+        //    if (_edges.Count == 0 && source.triangles.Length > 2)
+        //    {
+        //        _edges.Add(new MeshEdge(source.vertices[source.triangles[0]], source.vertices[source.triangles[1]], invertFacingNormal, dontAlignYAxis));
+        //        _edges.Add(new MeshEdge(source.vertices[source.triangles[1]], source.vertices[source.triangles[2]], invertFacingNormal, dontAlignYAxis));
+        //        _edges.Add(new MeshEdge(source.vertices[source.triangles[2]], source.vertices[source.triangles[0]], invertFacingNormal, dontAlignYAxis));
+        //    }
+        //    MeshEdge edge;
+        //    bool addA = true;
+        //    bool addB = true;
+        //    bool addC = true;
             
-        /*
-        public void SetMeshEdges(Mesh source, bool invertFacingNormal = false, bool dontAlignYAxis = false)
-        {
-            if (_edges.Count == 0 && source.triangles.Length > 2)
-            {
-                _edges.Add(new MeshEdge(source.vertices[source.triangles[0]], source.vertices[source.triangles[1]], invertFacingNormal, dontAlignYAxis));
-                _edges.Add(new MeshEdge(source.vertices[source.triangles[1]], source.vertices[source.triangles[2]], invertFacingNormal, dontAlignYAxis));
-                _edges.Add(new MeshEdge(source.vertices[source.triangles[2]], source.vertices[source.triangles[0]], invertFacingNormal, dontAlignYAxis));
-            }
-            MeshEdge edge;
-            bool addA = true;
-            bool addB = true;
-            bool addC = true;
-            
-            //CALC FROM MESH OPEN EDGES vertices
-            for (int ti = 0; ti < source.triangles.Length; ti += 3)
-            {
-                addA = !(IsPositionAtBoundryEdge(source.vertices[source.triangles[ti]]) || IsPositionAtBoundryEdge(source.vertices[source.triangles[ti + 1]]));
-                addB = !(IsPositionAtBoundryEdge(source.vertices[source.triangles[ti + 1]]) || IsPositionAtBoundryEdge(source.vertices[source.triangles[ti + 2]]));
-                addC = !(IsPositionAtBoundryEdge(source.vertices[source.triangles[ti + 2]]) || IsPositionAtBoundryEdge(source.vertices[source.triangles[ti]]));
+        //    //CALC FROM MESH OPEN EDGES vertices
+        //    for (int ti = 0; ti < source.triangles.Length; ti += 3)
+        //    {
+        //        addA = !(IsPositionAtBoundryEdge(source.vertices[source.triangles[ti]]) || IsPositionAtBoundryEdge(source.vertices[source.triangles[ti + 1]]));
+        //        addB = !(IsPositionAtBoundryEdge(source.vertices[source.triangles[ti + 1]]) || IsPositionAtBoundryEdge(source.vertices[source.triangles[ti + 2]]));
+        //        addC = !(IsPositionAtBoundryEdge(source.vertices[source.triangles[ti + 2]]) || IsPositionAtBoundryEdge(source.vertices[source.triangles[ti]]));
 
-                if(!addA && !addB && !addC)
-                {
-                    continue;
-                }
+        //        if(!addA && !addB && !addC)
+        //        {
+        //            continue;
+        //        }
 
-                for (int ei = _edges.Count - 1; ei > 0; ei--)
-                {
+        //        for (int ei = _edges.Count - 1; ei > 0; ei--)
+        //        {
 
-                    edge = _edges[ei];
+        //            edge = _edges[ei];
                     
-                    if (addA && IsSameEdge(edge, source.vertices[source.triangles[ti]], source.vertices[source.triangles[ti + 1]]))
-                    {
-                        _edges.Remove(edge);
-                        edge = null;
-                        addA = false;
-                    }
-                    else if (addB && IsSameEdge(edge, source.vertices[source.triangles[ti + 1]], source.vertices[source.triangles[ti + 2]]))
-                    {
-                        _edges.Remove(edge);
-                        edge = null;
-                        addB = false;
-                    }
-                    else if (addC && IsSameEdge(edge, source.vertices[source.triangles[ti + 2]], source.vertices[source.triangles[ti]]))
-                    {
-                        _edges.Remove(edge);
-                        edge = null;
-                        addC = false;
-                    }
+        //            if (addA && MeshEdgeManager.IsSameEdge(edge, source.vertices[source.triangles[ti]], source.vertices[source.triangles[ti + 1]]))
+        //            {
+        //                _edges.Remove(edge);
+        //                addA = false;
+        //            }
+        //            else if (addB && MeshEdgeManager.IsSameEdge(edge, source.vertices[source.triangles[ti + 1]], source.vertices[source.triangles[ti + 2]]))
+        //            {
+        //                _edges.Remove(edge);
+        //                addB = false;
+        //            }
+        //            else if (addC && MeshEdgeManager.IsSameEdge(edge, source.vertices[source.triangles[ti + 2]], source.vertices[source.triangles[ti]]))
+        //            {
+        //                _edges.Remove(edge);
+        //                addC = false;
+        //            }
+        //        }
+
+        //        if (addA)
+        //        {
+        //            _edges.Add(new MeshEdge(source.vertices[source.triangles[ti]], source.vertices[source.triangles[ti + 1]], invertFacingNormal, dontAlignYAxis));
+        //        }
+        //        if (addB)
+        //        {
+        //            _edges.Add(new MeshEdge(source.vertices[source.triangles[ti + 1]], source.vertices[source.triangles[ti + 2]], invertFacingNormal, dontAlignYAxis));
+        //        }
+        //        if (addC)
+        //        {
+        //            _edges.Add(new MeshEdge(source.vertices[source.triangles[ti + 2]], source.vertices[source.triangles[ti]], invertFacingNormal, dontAlignYAxis));
+        //        }
+        //    }
+        //}
+        #endregion MeshEdge
+
+        #region Convert to Jobs
+        //private JobHandle SetMeshEdgeJob(NavMeshTriangulation source, bool invertFacingNormal, bool dontAlignYAxis, Bounds bounds)
+        //{
+        //    var job = new SetMeshEdgeTask(source, invertFacingNormal, dontAlignYAxis, _listEdges, bounds, minJumpHeight, maxJumpHeight, jumpDistVertical);
+        //    return job.Schedule();
+        //}
+
+        [BurstCompile]
+        public struct SetMeshEdgeTask : IJob
+        {
+            //public NavMeshTriangulation source;
+            public bool invertFacingNormal;
+            public bool dontAlignYAxis;
+            public NativeList<MeshEdge> edges;
+            public Bounds bounds;
+            public float minJumpHeight;
+            public float maxJumpHeight;
+            public float jumpDistVertical;
+            public NativeArray<Vector3> vertices;
+            public NativeArray<int> indices;
+
+            //public SetMeshEdgeTask(NavMeshTriangulation source, bool invertFacingNormal, bool dontAlignYAxis,
+            public SetMeshEdgeTask(bool invertFacingNormal, bool dontAlignYAxis, Bounds bounds,
+                float minJumpHeight, float maxJumpHeight, float jumpDistVertical,
+                Vector3[] vertices, int[] indices)
+            {
+                //this.source = source;
+                this.invertFacingNormal = invertFacingNormal;
+                this.dontAlignYAxis = dontAlignYAxis;
+                this.edges = new NativeList<MeshEdge>(Allocator.Persistent);
+                this.bounds = bounds;
+                this.minJumpHeight = minJumpHeight;
+                this.maxJumpHeight = maxJumpHeight;
+                this.jumpDistVertical = jumpDistVertical;
+                this.vertices = new NativeArray<Vector3>(vertices, Allocator.Persistent);
+                this.indices = new NativeArray<int>(indices, Allocator.Persistent);
+            }
+
+            public void Execute()
+            {
+                SetMeshEdges(invertFacingNormal, dontAlignYAxis);
+            }
+
+            //vertices = sourceTriangulation.vertices,
+            //triangles = sourceTriangulation.indices
+
+            private void SetMeshEdges(bool invertFacingNormal, bool dontAlignYAxis)
+            {
+                if (edges.Length == 0 && indices.Length > 2)
+                {
+                    edges.Add(new MeshEdge(vertices[indices[0]], vertices[indices[1]], invertFacingNormal, dontAlignYAxis));
+                    edges.Add(new MeshEdge(vertices[indices[1]], vertices[indices[2]], invertFacingNormal, dontAlignYAxis));
+                    edges.Add(new MeshEdge(vertices[indices[2]], vertices[indices[0]], invertFacingNormal, dontAlignYAxis));
                 }
 
-                if (addA)
+                MeshEdge edge;
+                bool addA = true;
+                bool addB = true;
+                bool addC = true;
+
+                //CALC FROM MESH OPEN EDGES vertices
+                for (int ti = 0; ti < indices.Length; ti += 3)
                 {
-                    _edges.Add(new MeshEdge(source.vertices[source.triangles[ti]], source.vertices[source.triangles[ti + 1]], invertFacingNormal, dontAlignYAxis));
-                }
-                if (addB)
-                {
-                    _edges.Add(new MeshEdge(source.vertices[source.triangles[ti + 1]], source.vertices[source.triangles[ti + 2]], invertFacingNormal, dontAlignYAxis));
-                }
-                if (addC)
-                {
-                    _edges.Add(new MeshEdge(source.vertices[source.triangles[ti + 2]], source.vertices[source.triangles[ti]], invertFacingNormal, dontAlignYAxis));
+                    addA = !(IsPositionAtBoundryEdge(vertices[indices[ti]]) || IsPositionAtBoundryEdge(vertices[indices[ti + 1]]));
+                    addB = !(IsPositionAtBoundryEdge(vertices[indices[ti + 1]]) || IsPositionAtBoundryEdge(vertices[indices[ti + 2]]));
+                    addC = !(IsPositionAtBoundryEdge(vertices[indices[ti + 2]]) || IsPositionAtBoundryEdge(vertices[indices[ti]]));
+
+                    if (!addA && !addB && !addC)
+                    {
+                        continue;
+                    }
+
+                    for (int ei = edges.Length - 1; ei > 0; ei--)
+                    {
+
+                        edge = edges[ei];
+
+                        if (addA && IsSameEdge(edge, vertices[indices[ti]], vertices[indices[ti + 1]]))
+                        {
+                            edges.RemoveAtSwapBack(ei);
+                            //_edges.Remove(edge);
+                            addA = false;
+                        }
+                        else if (addB && IsSameEdge(edge, vertices[indices[ti + 1]], vertices[indices[ti + 2]]))
+                        {
+                            edges.RemoveAtSwapBack(ei);
+                            //_edges.Remove(edge);
+                            addB = false;
+                        }
+                        else if (addC && IsSameEdge(edge, vertices[indices[ti + 2]], vertices[indices[ti]]))
+                        {
+                            edges.RemoveAtSwapBack(ei);
+                            //_edges.Remove(edge);
+                            addC = false;
+                        }
+                    }
+
+                    if (addA)
+                    {
+                        edges.Add(new MeshEdge(vertices[indices[ti]], vertices[indices[ti + 1]], invertFacingNormal, dontAlignYAxis));
+                    }
+                    if (addB)
+                    {
+                        edges.Add(new MeshEdge(vertices[indices[ti + 1]], vertices[indices[ti + 2]], invertFacingNormal, dontAlignYAxis));
+                    }
+                    if (addC)
+                    {
+                        edges.Add(new MeshEdge(vertices[indices[ti + 2]], vertices[indices[ti]], invertFacingNormal, dontAlignYAxis));
+                    }
                 }
             }
-            
+
+            public bool IsSameEdge(MeshEdge edge, Vector3 positionA, Vector3 positionB)
+            {
+                return (edge.StartPoint == positionA && edge.EndPoint == positionB)
+                    || (edge.StartPoint == positionB && edge.EndPoint == positionA);
+            }
+
+            private bool IsPositionAtBoundryEdge(Vector3 position)
+            {
+                return (Vector3.Distance(position, new Vector3(position.x, bounds.min.y, position.z)) < minJumpHeight)
+                        || (Vector3.Distance(position, new Vector3(position.x, bounds.max.y, position.z)) < minJumpHeight)
+                        || (Vector3.Distance(position, new Vector3(bounds.min.x, position.y, position.z)) < jumpDistVertical)
+                        || (Vector3.Distance(position, new Vector3(bounds.max.x, position.y, position.z)) < jumpDistVertical)
+                        || (Vector3.Distance(position, new Vector3(position.x, position.y, bounds.min.z)) < jumpDistVertical)
+                        || (Vector3.Distance(position, new Vector3(position.x, position.y, bounds.max.z)) < jumpDistVertical);
+            }
         }
-        */
-        #endregion MeshEdge
+
+        [ContextMenu("CountListEdges")]
+        private void CountListEdges() => Debug.Log($"Edges count: {_edges.Count}");
+        #endregion
 
         private Vector3[] GetLinkStartEnd(Vector3 position, Quaternion normal)
         {
@@ -576,6 +734,7 @@ namespace RSToolkit.AI
 
     }
 
+    // normal struct MeshEdge
     public struct MeshEdge
     {
         public Vector3 StartPoint { get; internal set; }
