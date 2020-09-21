@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
@@ -22,17 +22,13 @@ namespace RSToolkit.AI
             Both
         }
 
-
         private NavMeshSurface _surface;
 
-        [SerializeField]
-        bool _Bidirectional = true;
-        public bool Bidirectional { get { return _Bidirectional; } set { _Bidirectional = value; } }
-
         private float _agentRadius;
-        //private MeshEdge[] _edges;        
+    
 
-        private List<MeshEdge> _edges = new List<MeshEdge>();
+        //private List<MeshEdge> _edges = new List<MeshEdge>();
+        private LinkedList<MeshEdge> _linkedEdges = new LinkedList<MeshEdge>();
         //private RaycastHit[] _raycastHits = new RaycastHit[1];
         private RaycastHit raycastHit;
 
@@ -89,10 +85,11 @@ namespace RSToolkit.AI
             {
                 if (navMeshLinks[i] != null)
                 {
-                    DestroyImmediate(navMeshLinks[i]);
+                    DestroyImmediate(navMeshLinks[i].gameObject);
                 }
             }
-            _edges.Clear();
+            // _edges.Clear();
+            //_linkedEdges.Clear();
         }
 
         #region MeshEdge
@@ -105,9 +102,11 @@ namespace RSToolkit.AI
                 triangles = sourceTriangulation.indices
             };
 
-            SetMeshEdges(m, invertFacingNormal, dontAlignYAxis);
+            // SetMeshEdges(m, invertFacingNormal, dontAlignYAxis);
+            SetMeshLinkedEdges(m, invertFacingNormal, dontAlignYAxis);
         }
 
+        /*
         // To optimize
         private bool TryAddUniqueMeshEdge(ref List<MeshEdge> source, Vector3 startPoint, Vector3 endPoint, bool invertFacingNormal = false, bool dontAlignYAxis = false)
         {
@@ -127,6 +126,7 @@ namespace RSToolkit.AI
 
         }
 
+        
         private bool TryAddUniqueMeshEdge(int edgeIndex, Vector3 positionA, Vector3 positionB, bool invertFacingNormal = false, bool dontAlignYAxis = false)
         {
             if (IsSameEdge(_edges[edgeIndex], positionA, positionB))
@@ -144,14 +144,79 @@ namespace RSToolkit.AI
             }
 
         }
+        */
 
-        private bool IsSameEdge(MeshEdge edge, Vector3 positionA, Vector3 positionB)
+        
+
+        public void SetMeshLinkedEdges(Mesh source, bool invertFacingNormal = false, bool dontAlignYAxis = false)
         {
-            return (edge.StartPoint == positionA && edge.EndPoint == positionB)
-                || (edge.StartPoint == positionB && edge.EndPoint == positionA);
-        }
+            LinkedListNode<MeshEdge> edgeNode;
+            if (!_linkedEdges.Any() && source.triangles.Length > 2)
+            {
+                edgeNode = _linkedEdges.AddFirst(new MeshEdge(source.vertices[source.triangles[0]], source.vertices[source.triangles[1]], invertFacingNormal, dontAlignYAxis));
+                edgeNode = _linkedEdges.AddAfter(edgeNode, new MeshEdge(source.vertices[source.triangles[1]], source.vertices[source.triangles[2]], invertFacingNormal, dontAlignYAxis));
+                _linkedEdges.AddAfter(edgeNode, new MeshEdge(source.vertices[source.triangles[2]], source.vertices[source.triangles[0]], invertFacingNormal, dontAlignYAxis));
+            }
 
-        // public static MeshEdge[] GetMeshEdges(Mesh source, bool invertFacingNormal = false, bool dontAlignYAxis = false)
+            bool addA = true;
+            bool addB = true;
+            bool addC = true;
+
+            //CALC FROM MESH OPEN EDGES vertices
+            for (int ti = 0; ti < source.triangles.Length; ti += 3)
+            {
+                addA = !(IsPositionAtBoundryEdge(source.vertices[source.triangles[ti]]) || IsPositionAtBoundryEdge(source.vertices[source.triangles[ti + 1]]));
+                addB = !(IsPositionAtBoundryEdge(source.vertices[source.triangles[ti + 1]]) || IsPositionAtBoundryEdge(source.vertices[source.triangles[ti + 2]]));
+                addC = !(IsPositionAtBoundryEdge(source.vertices[source.triangles[ti + 2]]) || IsPositionAtBoundryEdge(source.vertices[source.triangles[ti]]));
+
+                if (!addA && !addB && !addC)
+                {
+                    continue;
+                }
+                edgeNode = _linkedEdges.First;
+                
+                while (edgeNode != null)
+                {                    
+                    if (addA && MeshEdgeManager.IsSameEdge(edgeNode.Value, source.vertices[source.triangles[ti]], source.vertices[source.triangles[ti + 1]]))  //edgeNode.Value.HasPoints(source.vertices[source.triangles[ti]], source.vertices[source.triangles[ti + 1]]))
+                    {
+                        _linkedEdges.Remove(edgeNode);
+                        addA = false;
+                    }
+                    else if (addB && MeshEdgeManager.IsSameEdge(edgeNode.Value, source.vertices[source.triangles[ti + 1]], source.vertices[source.triangles[ti + 2]]))  //edgeNode.Value.HasPoints(source.vertices[source.triangles[ti + 1]], source.vertices[source.triangles[ti + 2]]))
+                    {
+                        _linkedEdges.Remove(edgeNode);
+                        addB = false;
+                    }
+                    else if (addC && MeshEdgeManager.IsSameEdge(edgeNode.Value, source.vertices[source.triangles[ti + 2]], source.vertices[source.triangles[ti]])) //edgeNode.Value.HasPoints(source.vertices[source.triangles[ti + 2]], source.vertices[source.triangles[ti]]))
+                    {
+                        _linkedEdges.Remove(edgeNode);
+                        addC = false;
+                    }
+                    edgeNode = edgeNode.Next;
+                }
+
+                edgeNode = _linkedEdges.Last;
+
+
+                if (addA)
+                {
+
+                    _linkedEdges.AddAfter(edgeNode, new MeshEdge(source.vertices[source.triangles[ti]], source.vertices[source.triangles[ti + 1]], invertFacingNormal, dontAlignYAxis));                                      
+                }
+                if (addB)
+                {
+
+                    _linkedEdges.AddAfter(edgeNode, new MeshEdge(source.vertices[source.triangles[ti + 1]], source.vertices[source.triangles[ti + 2]], invertFacingNormal, dontAlignYAxis));                   
+                }
+                if (addC)
+                {
+                    _linkedEdges.AddAfter(edgeNode, new MeshEdge(source.vertices[source.triangles[ti + 2]], source.vertices[source.triangles[ti]], invertFacingNormal, dontAlignYAxis));
+                }
+
+            }
+        }
+            
+        /*
         public void SetMeshEdges(Mesh source, bool invertFacingNormal = false, bool dontAlignYAxis = false)
         {
             if (_edges.Count == 0 && source.triangles.Length > 2)
@@ -164,7 +229,7 @@ namespace RSToolkit.AI
             bool addA = true;
             bool addB = true;
             bool addC = true;
-
+            
             //CALC FROM MESH OPEN EDGES vertices
             for (int ti = 0; ti < source.triangles.Length; ti += 3)
             {
@@ -217,6 +282,7 @@ namespace RSToolkit.AI
             }
             
         }
+        */
         #endregion MeshEdge
 
         private Vector3[] GetLinkStartEnd(Vector3 position, Quaternion normal)
@@ -338,6 +404,7 @@ namespace RSToolkit.AI
             spawnedLink.transform.SetParent(transform);
         }
 
+        /*
         private void SpawnLinks()
         {
             if (_edges.Count == 0) return;
@@ -379,10 +446,57 @@ namespace RSToolkit.AI
                 }
             }
         }
+        */
 
+        private void SpawnLinks()
+        {
+            if (!_linkedEdges.Any()) return;
+
+
+            int linkCount;
+            float heightShift;
+            LinkedListNode<MeshEdge> edgeNode = _linkedEdges.First;
+            Vector3 placePos;
+            
+            while(edgeNode != null)
+            {
+                linkCount = (int)Mathf.Clamp(edgeNode.Value.Length / linkWidth, 0, 10000);
+                heightShift = 0;
+                for (int li = 0; li < linkCount; li++) //every edge length segment
+                {
+                    placePos = Vector3.Lerp(
+                                           edgeNode.Value.StartPoint,
+                                           edgeNode.Value.EndPoint,
+                                           (float)li / (float)linkCount //position on edge
+                                           + 0.5f / (float)linkCount //shift for half link width
+                                       ) + edgeNode.Value.FacingNormal * Vector3.up * heightShift;
+
+
+                    switch (Direction)
+                    {
+                        case LinkDirection.Horizontal:
+                            TrySpawnHorizontalLink(placePos, edgeNode.Value.FacingNormal);
+                            break;
+                        case LinkDirection.Vertical:
+                            TrySpawnVerticalLink(placePos, edgeNode.Value.FacingNormal);
+                            break;
+                        case LinkDirection.Both:
+                            TrySpawnHorizontalLink(placePos, edgeNode.Value.FacingNormal);
+                            TrySpawnVerticalLink(placePos, edgeNode.Value.FacingNormal);
+                            break;
+                    }
+
+                }
+                edgeNode = edgeNode.Next;
+            }
+        }
 
         public void Bake()
         {
+#if UNITY_EDITOR
+            if (!Application.isPlaying) _surface = GetComponent<NavMeshSurface>();
+#endif
+
             var settings = NavMesh.GetSettingsByID(NavMeshSurfaceComponent.agentTypeID);
             _agentRadius = settings.agentRadius;
 
@@ -404,22 +518,117 @@ namespace RSToolkit.AI
         
 
     }
-
-    public class MeshEdge
-    {
-
-        public Vector3 StartPoint { get; private set; }
-        public Vector3 EndPoint { get; private set; }
-
-        public Vector3 StartPointUp { get; private set; }
     
-        public Vector3 EndPointUp { get; private set; }
-
-        public float Length { get; private set; }
-        public Quaternion FacingNormal { get; private set; }
+    public static class MeshEdgeManager
+    {
         private const float TRIGGER_ANGLE = 0.999f;
 
+        public static Quaternion GetInverceFacingNormal(Quaternion facingNormal)
+        {
+            return Quaternion.Euler(Vector3.up * 180) * facingNormal;
+        }
+
+        private static Quaternion SubCalculateFacingNormal(Vector3 startPoint, Vector3 endPoint, Vector3 startPointUp, Vector3 endPointUp)
+        {
+            return Quaternion.LookRotation(
+                      Vector3.Cross(endPoint - startPoint,
+                                    Vector3.Lerp(endPointUp, startPointUp, 0.5f) -
+                                        Vector3.Lerp(endPoint, startPoint, 0.5f)
+                                    )
+                      );
+        }
+
+        public static Quaternion CalculateFacingNormal(Vector3 startPoint, Vector3 endPoint, out Vector3 startPointUp, out Vector3 endPointUp, bool dontAlignYAxis = false)
+        {
+            startPointUp = Vector3.zero;
+            endPointUp = Vector3.zero;
+
+            var result = Quaternion.LookRotation(Vector3.Cross(endPoint - startPoint, Vector3.up));
+            if (startPointUp.sqrMagnitude > 0)
+            {
+                result = SubCalculateFacingNormal(startPoint, endPoint, startPointUp, endPointUp);
+
+                //FIX FOR NORMALs POINTING DIRECT TO UP/DOWN
+                if (Mathf.Abs(Vector3.Dot(Vector3.up, (result * Vector3.forward).normalized)) >
+                    TRIGGER_ANGLE)
+                {
+                    startPointUp += new Vector3(0, 0.1f, 0);
+                    result = SubCalculateFacingNormal(startPoint, endPoint, startPointUp, endPointUp);
+                }
+            }
+
+            if (dontAlignYAxis)
+            {
+                result = Quaternion.LookRotation(
+                    result * Vector3.forward,
+                    Quaternion.LookRotation(endPoint - startPoint) * Vector3.up
+                );
+            }
+
+            return result;
+        }
+
+        public static bool IsSameEdge(MeshEdge edge, Vector3 positionA, Vector3 positionB)
+        {
+            return (edge.StartPoint == positionA && edge.EndPoint == positionB)
+                || (edge.StartPoint == positionB && edge.EndPoint == positionA);
+        }
+
+    }
+
+    public struct MeshEdge
+    {
+        public Vector3 StartPoint { get; internal set; }
+        public Vector3 EndPoint { get; internal set; }
+
+        public Vector3 StartPointUp { get; internal set; }
+
+        public Vector3 EndPointUp { get; internal set; }
+
+        public float Length { get; internal set; }
+        public Quaternion FacingNormal { get; internal set; }
+
         public MeshEdge(Vector3 startPoint, Vector3 endPoint, bool invertFacingNormal = false, bool dontAlignYAxis = false)
+        {
+            StartPoint = startPoint;
+            EndPoint = endPoint;
+            Length = Vector3.Distance(StartPoint, EndPoint);
+
+            Vector3 startPointUp;
+            Vector3 endPointUp;
+            FacingNormal = MeshEdgeManager.CalculateFacingNormal(StartPoint, EndPoint, out startPointUp, out endPointUp, dontAlignYAxis);
+
+            StartPointUp = startPointUp;
+            EndPointUp = endPointUp;
+
+            if (invertFacingNormal)
+            {
+                FacingNormal = MeshEdgeManager.GetInverceFacingNormal(FacingNormal);
+            }
+        }
+    }
+ 
+        /*
+        public class MeshEdge
+        {
+
+            public Vector3 StartPoint { get; private set; }
+            public Vector3 EndPoint { get; private set; }
+
+            public Vector3 StartPointUp { get; private set; }
+
+            public Vector3 EndPointUp { get; private set; }
+
+            public float Length { get; private set; }
+            public Quaternion FacingNormal { get; private set; }
+            private const float TRIGGER_ANGLE = 0.999f;
+
+            public MeshEdge(Vector3 startPoint, Vector3 endPoint, bool invertFacingNormal = false, bool dontAlignYAxis = false)
+            {
+                PopulateValues(startPoint, endPoint, invertFacingNormal, dontAlignYAxis);
+            }
+
+            public void PopulateValues(Vector3 startPoint, Vector3 endPoint, bool invertFacingNormal = false, bool dontAlignYAxis = false)
         {
             StartPoint = startPoint;
             EndPoint = endPoint;
@@ -433,58 +642,64 @@ namespace RSToolkit.AI
             }
         }
 
-        public void InvertFacingNormal()
-        {
-            FacingNormal = Quaternion.Euler(Vector3.up * 180) * FacingNormal;
-        }
-
-        private Quaternion SubCalculateFacingNormal()
-        {
-            return Quaternion.LookRotation(
-                      Vector3.Cross(EndPoint - StartPoint,
-                                    Vector3.Lerp(EndPointUp, StartPointUp, 0.5f) -
-                                        Vector3.Lerp(EndPoint, StartPoint, 0.5f)
-                                    )
-                      );
-        }
-
-        private void CalculateFacingNormal(bool dontAlignYAxis = false)
-        {
-            FacingNormal = Quaternion.LookRotation(Vector3.Cross(EndPoint - StartPoint, Vector3.up));
-            if (StartPointUp.sqrMagnitude > 0)
+            public void InvertFacingNormal()
             {
-                FacingNormal = SubCalculateFacingNormal();
+                FacingNormal = Quaternion.Euler(Vector3.up * 180) * FacingNormal;
+            }
 
+            private Quaternion SubCalculateFacingNormal()
+            {
+                return Quaternion.LookRotation(
+                          Vector3.Cross(EndPoint - StartPoint,
+                                        Vector3.Lerp(EndPointUp, StartPointUp, 0.5f) -
+                                            Vector3.Lerp(EndPoint, StartPoint, 0.5f)
+                                        )
+                          );
+            }
 
-                //FIX FOR NORMALs POINTING DIRECT TO UP/DOWN
-                if (Mathf.Abs(Vector3.Dot(Vector3.up, (FacingNormal * Vector3.forward).normalized)) >
-                    TRIGGER_ANGLE)
+            private void CalculateFacingNormal(bool dontAlignYAxis = false)
+            {
+                FacingNormal = Quaternion.LookRotation(Vector3.Cross(EndPoint - StartPoint, Vector3.up));
+                if (StartPointUp.sqrMagnitude > 0)
                 {
-                    StartPointUp += new Vector3(0, 0.1f, 0);
                     FacingNormal = SubCalculateFacingNormal();
+
+
+                    //FIX FOR NORMALs POINTING DIRECT TO UP/DOWN
+                    if (Mathf.Abs(Vector3.Dot(Vector3.up, (FacingNormal * Vector3.forward).normalized)) >
+                        TRIGGER_ANGLE)
+                    {
+                        StartPointUp += new Vector3(0, 0.1f, 0);
+                        FacingNormal = SubCalculateFacingNormal();
+                    }
                 }
-            }
 
-            if (dontAlignYAxis)
-            {
-                FacingNormal = Quaternion.LookRotation(
-                    FacingNormal * Vector3.forward,
-                    Quaternion.LookRotation(EndPoint - StartPoint) * Vector3.up
-                );
-            }
+                if (dontAlignYAxis)
+                {
+                    FacingNormal = Quaternion.LookRotation(
+                        FacingNormal * Vector3.forward,
+                        Quaternion.LookRotation(EndPoint - StartPoint) * Vector3.up
+                    );
+                }
 
-        }
+            }
 
         #region Static Functions
 
-        
 
-        
+        public bool HasPoints(Vector3 pointA, Vector3 pointB)
+        {
+            return (StartPoint == pointA && EndPoint == pointB)
+                || (StartPoint == pointB && EndPoint == pointA);
+        }
+
+
+
         #endregion
 
     }
-
-
+        
+       */
 
 #if UNITY_EDITOR
 
