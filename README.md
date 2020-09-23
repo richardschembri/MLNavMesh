@@ -5,6 +5,9 @@ Bot(AI) code is taken from my other project, the [Unity RSToolkit](https://githu
 
 NavMeshLink code is based on [this forum post](https://forum.unity.com/threads/navmesh-links-generator-for-navmeshcomponents.515143/).
 
+# Updated:
+-> Update to make it uses Job.
+
 ## License
 The [Unity NavMeshComponents](https://github.com/Unity-Technologies/NavMeshComponents) and [Magic Leap Toolkit Unity](https://github.com/magicleap/Magic-Leap-Toolkit-Unity) source code is subject to license of the respective project.
 
