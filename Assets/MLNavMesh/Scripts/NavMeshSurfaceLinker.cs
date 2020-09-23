@@ -40,7 +40,7 @@ namespace RSToolkit.AI
 
         private Vector3[] _startEnd = new Vector3[2];
         private List<MeshEdge> _edges = new List<MeshEdge>(512);
-        private NativeList<MeshEdge> _listEdges = new NativeList<MeshEdge>(Allocator.Persistent);
+        //private NativeList<MeshEdge> _listEdges = new NativeList<MeshEdge>(Allocator.Persistent);
 
         public LinkDirection Direction = LinkDirection.Vertical;
 
@@ -95,7 +95,7 @@ namespace RSToolkit.AI
                     DestroyImmediate(navMeshLinks[i].gameObject);
                 }
             }
-            // _edges.Clear();
+            _edges.Clear();
             //_linkedEdges.Clear();
         }
 
@@ -562,7 +562,7 @@ namespace RSToolkit.AI
             spawnedLink.transform.SetParent(transform);
         }
 
-        /*
+
         private void SpawnLinks()
         {
             if (_edges.Count == 0) return;
@@ -604,8 +604,9 @@ namespace RSToolkit.AI
                 }
             }
         }
-        */
+        
 
+        /*
         private void SpawnLinks()
         {
             if (!_linkedEdges.Any()) return;
@@ -648,6 +649,7 @@ namespace RSToolkit.AI
                 edgeNode = edgeNode.Next;
             }
         }
+        */
 
         public void Bake()
         {
