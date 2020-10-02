@@ -7,13 +7,13 @@ using System.Linq;
 #if UNITY_EDITOR
 using UnityEditor;
 using UnityEditor.SceneManagement;
+using UnityEditor.AI;
 #endif
 
 #region Jobs
 using Unity.Burst;
 using Unity.Jobs;
 using Unity.Collections;
-using UnityEditor.AI;
 #endregion
 
 // Based on source code found in this Unity post: https://forum.unity.com/threads/navmesh-links-generator-for-navmeshcomponents.515143/
