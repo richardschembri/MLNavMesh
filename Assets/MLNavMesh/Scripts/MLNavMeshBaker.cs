@@ -37,9 +37,11 @@ namespace RSToolkit.AI.MLNavMesh
         [SerializeField]       
         private NavMeshObstacle _roofObstaclePrefab;
         public NavMeshObstacle RoofObstacle { get; private set; } = null;
+        #endregion Components
+
         [SerializeField]       
         private float _roofObsticleHeight = 0.15f;
-        #endregion Components
+        private WaitForSeconds _bakeWaitTime;
 
         private bool AdjustRoofObstacle()
         {
@@ -82,6 +84,8 @@ namespace RSToolkit.AI.MLNavMesh
         {
             _surface = GetComponent<NavMeshSurface>();
             _linker = GetComponent<NavMeshSurfaceLinker>();
+
+            _bakeWaitTime = new WaitForSeconds(BakeTimer);
 
             switch (BakeCondition)
             {
@@ -152,7 +156,7 @@ namespace RSToolkit.AI.MLNavMesh
 
         IEnumerator DelayedBakeNavMesh()
         {
-            yield return new WaitForSeconds(BakeTimer);
+            yield return _bakeWaitTime;
             Bake(AutoBake);                    
         }
 
