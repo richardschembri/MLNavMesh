@@ -337,6 +337,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2087a72f4658e3744856827d7c3857d7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _roofObstaclePrefab: {fileID: 5344619315370527293, guid: 78cfa5045ed936b45928a05e2e7a37f0,
+    type: 3}
   BakeCondition: 0
   _mlSpatialMapper: {fileID: 1302465857}
   _autoBake: 3
@@ -382,22 +384,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ccbb1934a9c2dd74cbfefa53d62078ba, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _Bidirectional: 1
-  Direction: 1
-  minJumpHeight: 0.15
-  maxJumpHeight: 1
-  jumpDistVertical: 0.25
-  maxJumpDistHorizontal: 5
-  linkStartPointOffset: 0.25
+  _direction: 1
+  _minJumpHeight: 0.15
+  _maxJumpHeight: 1
+  _jumpDistVertical: 0.035
+  _maxJumpDistHorizontal: 5
+  _linkStartPointOffset: 0.25
   _obsticleCheckYOffset: 0.5
-  sphereCastRadius: 1
-  linkWidth: 0.25
-  linkArea: 0
-  linkBidirectional: 1
-  linkCostModifier: -1
-  linkAutoUpdatePosition: 1
-  invertFacingNormal: 0
-  dontAlignYAxis: 0
+  _sphereCastRadius: 1
+  _linkWidth: 0.25
+  _linkArea: 0
+  _linkBidirectional: 0
+  _linkCostModifier: -1
+  _linkAutoUpdatePosition: 1
+  _invertFacingNormal: 0
+  _dontAlignYAxis: 0
 --- !u!4 &1125097283 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 4214550324010282, guid: 24158fb1437dc8e418d893939758764d,
@@ -603,7 +604,7 @@ MonoBehaviour:
   m_MeshParent: {fileID: 1080120449}
   m_MeshType: 0
   m_FillHoleLength: 1
-  m_Planarize: 0
+  m_Planarize: 1
   m_DisconnectedComponentArea: 0.25
   m_MeshQueueSize: 4
   m_PollingRate: 0.25

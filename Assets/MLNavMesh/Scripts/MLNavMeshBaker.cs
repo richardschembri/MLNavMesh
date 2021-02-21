@@ -30,8 +30,31 @@ namespace RSToolkit.AI.MLNavMesh
         }
 
         public bool HasBaked { get; private set; } = false;
+
+        #region Components
         private NavMeshSurface _surface;
         private NavMeshSurfaceLinker _linker;
+        [SerializeField]       
+        private NavMeshObstacle _roofObstaclePrefab;
+        public NavMeshObstacle RoofObstacle { get; private set; } = null;
+        #endregion Components
+
+        [SerializeField]       
+        private float _roofObsticleHeight = 0.15f;
+        private WaitForSeconds _bakeWaitTime;
+
+        private bool AdjustRoofObstacle()
+        {
+            var sourceBounds = _surface.navMeshData.sourceBounds;
+            if (RoofObstacle == null || sourceBounds.max.y < .5f)
+            {
+                return false;
+            }
+            
+            RoofObstacle.transform.position = new Vector3(sourceBounds.center.x, sourceBounds.max.y, sourceBounds.center.z);
+            RoofObstacle.size = new Vector3(sourceBounds.size.x, _roofObsticleHeight, sourceBounds.size.z);
+            return true;
+        }
 
         public BakeConditions BakeCondition = BakeConditions.BOTH;
 
@@ -62,6 +85,8 @@ namespace RSToolkit.AI.MLNavMesh
             _surface = GetComponent<NavMeshSurface>();
             _linker = GetComponent<NavMeshSurfaceLinker>();
 
+            _bakeWaitTime = new WaitForSeconds(BakeTimer);
+
             switch (BakeCondition)
             {
                 case BakeConditions.MESH_ADDED:
@@ -75,8 +100,8 @@ namespace RSToolkit.AI.MLNavMesh
                     _mlSpatialMapper.meshUpdated += OnMeshUpdatedListener;
                     break;
             }
-            
-            
+
+            SpawnRoofObstacle();
             // StartCoroutine(DelayedFirstBakeNavMesh());
         }
 
@@ -122,6 +147,7 @@ namespace RSToolkit.AI.MLNavMesh
 
             if (HasBaked)
             {
+                AdjustRoofObstacle();
                 OnNavMeshBaked.Invoke(this, bakeType);
             }
 
@@ -130,7 +156,7 @@ namespace RSToolkit.AI.MLNavMesh
 
         IEnumerator DelayedBakeNavMesh()
         {
-            yield return new WaitForSeconds(BakeTimer);
+            yield return _bakeWaitTime;
             Bake(AutoBake);                    
         }
 
@@ -144,6 +170,15 @@ namespace RSToolkit.AI.MLNavMesh
             }
         }
         */
+
+        private void SpawnRoofObstacle()
+        {
+            if(_roofObstaclePrefab != null)
+            {
+                RoofObstacle = Instantiate(_roofObstaclePrefab, new Vector3(0f, 100f, 0f), Quaternion.Euler(0f, 0f, 0f), _surface.transform.parent);
+                RoofObstacle.transform.localScale = new Vector3(1f, 1f, 1f);
+            }
+        }
 
     }
 }
